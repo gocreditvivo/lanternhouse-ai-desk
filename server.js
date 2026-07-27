@@ -7,6 +7,7 @@ const PORT = Number(env.PORT || 10000);
 const PUBLIC_BASE_URL = String(env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const TWILIO_MANAGER_PHONE = env.TWILIO_MANAGER_PHONE || '+15717495444';
 const TWILIO_CALLER_ID = env.TWILIO_CALLER_ID || '';
+const VIETNAMESE_LANGUAGE = env.TWILIO_VIETNAMESE_LANGUAGE || 'vi-VN';
 
 function xmlEscape(value) {
   return String(value || '')
@@ -21,17 +22,22 @@ function twiml(inner) {
   return `<?xml version="1.0" encoding="UTF-8"?><Response>${inner}</Response>`;
 }
 
-function say(text) {
-  return `<Say voice="alice" language="en-US">${xmlEscape(text)}</Say>`;
+function say(text, language = 'en-US') {
+  const voice = language === 'en-US' ? ' voice="alice"' : '';
+  return `<Say${voice} language="${xmlEscape(language)}">${xmlEscape(text)}</Say>`;
+}
+
+function sayLang(text, language) {
+  return language === 'vi' ? say(text, VIETNAMESE_LANGUAGE) : say(text, 'en-US');
 }
 
 function publicAction(pathname) {
   return PUBLIC_BASE_URL ? `${PUBLIC_BASE_URL}${pathname}` : pathname;
 }
 
-function gather({ action, prompt, timeout = 5, hints = '' }) {
+function gather({ action, prompt, timeout = 5, hints = '', language = 'en' }) {
   const hintAttr = hints ? ` hints="${xmlEscape(hints)}"` : '';
-  return `<Gather input="speech dtmf" action="${xmlEscape(action)}" method="POST" timeout="${timeout}" speechTimeout="auto" actionOnEmptyResult="true"${hintAttr}>${say(prompt)}</Gather>`;
+  return `<Gather input="speech dtmf" action="${xmlEscape(action)}" method="POST" timeout="${timeout}" speechTimeout="auto" actionOnEmptyResult="true"${hintAttr}>${sayLang(prompt, language)}</Gather>`;
 }
 
 function sendJson(res, status, payload) {
@@ -70,6 +76,17 @@ function normalizeSpeech(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function detectLanguage(form) {
+  const speech = normalizeSpeech(form.SpeechResult || form.UnstableSpeechResult || '');
+  const digits = String(form.Digits || '').trim();
+  if (digits === '3' || speech.includes('vietnamese') || speech.includes('tieng viet') || speech.includes('viet nam')) return 'vi';
+  return 'en';
+}
+
+function languageFromUrl(url) {
+  return url.searchParams.get('language') === 'vi' ? 'vi' : 'en';
+}
+
 function detectLocation(form) {
   const speech = normalizeSpeech(form.SpeechResult || form.UnstableSpeechResult || '');
   const digits = String(form.Digits || '').trim();
@@ -81,80 +98,97 @@ function detectLocation(form) {
 function shouldTransferToManager(form) {
   const speech = normalizeSpeech(form.SpeechResult || form.UnstableSpeechResult || '');
   const digits = String(form.Digits || '').trim();
-  return digits === '9' || /manager|owner|complaint|refund|wrong|missing|police|health|emergency|uber|doordash|driver|payment|stuck/.test(speech);
+  return digits === '9' || /manager|owner|complaint|refund|wrong|missing|police|health|emergency|uber|doordash|driver|payment|stuck|quan ly|chu|khieu nai|hoan tien|sai mon|thieu mon|canh sat|khan cap/.test(speech);
+}
+
+function locationPrompt(language) {
+  if (language === 'vi') {
+    return 'Cảm ơn quý khách đã gọi Lantern House. Quý khách gọi cho chi nhánh Reston hay Falls Church? Bấm 1 cho Reston, hoặc bấm 2 cho Falls Church.';
+  }
+  return 'Thank you for calling Lantern House. This is Linh. This call may be recorded for training and service quality. Are you calling for our Reston or Falls Church location? You can press 1 for Reston, 2 for Falls Church, or 3 for Vietnamese.';
+}
+
+function intentPrompt(location, language) {
+  if (language === 'vi') {
+    return `Cảm ơn quý khách. Em đã ghi nhận chi nhánh ${location}. Hiện đang ở chế độ thử nghiệm. Quý khách có thể nói đặt món, thực đơn, catering, khiếu nại, quản lý, hoặc bấm 9 để thử chuyển cho quản lý.`;
+  }
+  return `Thank you. I have ${location}. In this test mode, say order, menu, catering, complaint, manager, or press 9 to test manager transfer.`;
+}
+
+function connectedPrompt(location, language) {
+  if (language === 'vi') {
+    return `Tốt rồi. Linh đã kết nối thử nghiệm cho chi nhánh ${location}. Chức năng đặt món bằng trí tuệ nhân tạo, gửi tin nhắn, và trả lời thực đơn trực tiếp sẽ được kết nối sau khi cấu hình hệ thống chính thức.`;
+  }
+  return `Good. Linh test mode is connected for ${location}. Full AI ordering, SMS links, and live menu answers connect after the production voice provider is configured.`;
 }
 
 async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
 
   if (req.method === 'GET' && url.pathname === '/health') {
-    sendJson(res, 200, {
-      ok: true,
-      service: 'lanternhouse-ai-desk',
-      publicBaseUrl: PUBLIC_BASE_URL || null,
-      ts: new Date().toISOString(),
-    });
+    sendJson(res, 200, { ok: true, service: 'lanternhouse-ai-desk', publicBaseUrl: PUBLIC_BASE_URL || null, ts: new Date().toISOString() });
     return;
   }
 
   if ((req.method === 'GET' || req.method === 'POST') && url.pathname === '/twilio/voice') {
     sendXml(res, 200, twiml(
       gather({
-        action: publicAction('/twilio/voice/location'),
-        prompt: 'Thank you for calling Lantern House. This is Linh. This call may be recorded for training and service quality. Are you calling for our Reston or Falls Church location? You can also press 1 for Reston or 2 for Falls Church.',
-        hints: 'Reston,Falls Church,Lantern House,Vietnamese,restaurant',
+        action: publicAction('/twilio/voice/language'),
+        prompt: 'Thank you for calling Lantern House. This is Linh. For English, stay on the line or press 1. For Vietnamese, press 3.',
+        hints: 'English,Vietnamese,Reston,Falls Church,Lantern House',
       }) +
-      say('I did not hear a location. Please call again, or press 1 for Reston and 2 for Falls Church next time.')
+      say('I did not hear a selection. I will continue in English.') +
+      gather({ action: publicAction('/twilio/voice/location?language=en'), prompt: locationPrompt('en'), hints: 'Reston,Falls Church' })
+    ));
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/twilio/voice/language') {
+    const form = await readForm(req);
+    const language = detectLanguage(form);
+    sendXml(res, 200, twiml(
+      gather({ action: publicAction(`/twilio/voice/location?language=${language}`), prompt: locationPrompt(language), hints: 'Reston,Falls Church', language }) +
+      sayLang(language === 'vi' ? 'Em chưa nghe rõ chi nhánh. Xin gọi lại, hoặc bấm 1 cho Reston và 2 cho Falls Church.' : 'I did not hear a location. Please call again, or press 1 for Reston and 2 for Falls Church next time.', language)
     ));
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/twilio/voice/location') {
     const form = await readForm(req);
+    const language = languageFromUrl(url);
     const location = detectLocation(form);
     if (!location) {
       sendXml(res, 200, twiml(
-        gather({
-          action: publicAction('/twilio/voice/location'),
-          prompt: 'I want to route you correctly. Please say Reston or Falls Church, or press 1 for Reston and 2 for Falls Church.',
-          hints: 'Reston,Falls Church',
-        }) +
-        say('I still could not confirm the location. I will end this test call now.')
+        gather({ action: publicAction(`/twilio/voice/location?language=${language}`), prompt: language === 'vi' ? 'Em muốn chuyển đúng chi nhánh. Xin nói Reston hoặc Falls Church, hoặc bấm 1 cho Reston và 2 cho Falls Church.' : 'I want to route you correctly. Please say Reston or Falls Church, or press 1 for Reston and 2 for Falls Church.', hints: 'Reston,Falls Church', language }) +
+        sayLang(language === 'vi' ? 'Em vẫn chưa xác nhận được chi nhánh. Em sẽ kết thúc cuộc gọi thử nghiệm này.' : 'I still could not confirm the location. I will end this test call now.', language)
       ));
       return;
     }
-
     sendXml(res, 200, twiml(
-      gather({
-        action: publicAction(`/twilio/voice/intent?location=${encodeURIComponent(location)}`),
-        prompt: `Thank you. I have ${location}. In this test mode, say order, menu, catering, complaint, manager, or press 9 to test manager transfer.`,
-        hints: 'order,menu,catering,complaint,manager,owner,Uber,DoorDash,driver,allergy,gluten free',
-      }) +
-      say('I did not hear a request. This Twilio test is connected.')
+      gather({ action: publicAction(`/twilio/voice/intent?location=${encodeURIComponent(location)}&language=${language}`), prompt: intentPrompt(location, language), hints: 'order,menu,catering,complaint,manager,owner,Uber,DoorDash,driver,allergy,gluten free', language }) +
+      sayLang(language === 'vi' ? 'Em chưa nghe rõ yêu cầu. Kết nối thử nghiệm Twilio đã hoạt động.' : 'I did not hear a request. This Twilio test is connected.', language)
     ));
     return;
   }
 
   if (req.method === 'POST' && url.pathname === '/twilio/voice/intent') {
     const form = await readForm(req);
+    const language = languageFromUrl(url);
     const location = url.searchParams.get('location') || 'the selected location';
     if (shouldTransferToManager(form)) {
       if (/^\+\d{10,15}$/.test(TWILIO_MANAGER_PHONE)) {
         const callerId = TWILIO_CALLER_ID ? ` callerId="${xmlEscape(TWILIO_CALLER_ID)}"` : '';
         sendXml(res, 200, twiml(
-          say(`I will get the restaurant team for ${location}. One moment please.`) +
+          sayLang(language === 'vi' ? `Em sẽ chuyển quý khách cho đội ngũ nhà hàng tại ${location}. Xin chờ một chút.` : `I will get the restaurant team for ${location}. One moment please.`, language) +
           `<Dial${callerId}>${xmlEscape(TWILIO_MANAGER_PHONE)}</Dial>` +
-          say('The manager was not available. Please leave your name and phone number after the tone.')
+          sayLang(language === 'vi' ? 'Quản lý hiện chưa nghe máy. Xin để lại tên và số điện thoại sau tiếng bíp.' : 'The manager was not available. Please leave your name and phone number after the tone.', language)
         ));
         return;
       }
-      sendXml(res, 200, twiml(say('Manager transfer is not configured yet.')));
+      sendXml(res, 200, twiml(sayLang(language === 'vi' ? 'Chức năng chuyển cho quản lý chưa được cấu hình.' : 'Manager transfer is not configured yet.', language)));
       return;
     }
-
-    sendXml(res, 200, twiml(
-      say(`Good. Linh test mode is connected for ${location}. Full AI ordering, SMS links, and live menu answers connect after the production voice provider is configured.`)
-    ));
+    sendXml(res, 200, twiml(sayLang(connectedPrompt(location, language), language)));
     return;
   }
 
