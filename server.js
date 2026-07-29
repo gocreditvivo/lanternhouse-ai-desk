@@ -5,8 +5,9 @@ const { URL } = require('url');
 const env = process.env;
 const PORT = Number(env.PORT || 10000);
 const PUBLIC_BASE_URL = String(env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
-const TWILIO_MANAGER_PHONE = env.TWILIO_MANAGER_PHONE || '+15717495444';
-const TWILIO_CALLER_ID = env.TWILIO_CALLER_ID || '';
+const TWILIO_TEST_MODE = String(env.TWILIO_TEST_MODE || 'true').toLowerCase() === 'true';
+const TWILIO_MANAGER_PHONE = String(env.TWILIO_MANAGER_PHONE || '').trim();
+const TWILIO_CALLER_ID = String(env.TWILIO_CALLER_ID || '').trim();
 const VIETNAMESE_LANGUAGE = env.TWILIO_VIETNAMESE_LANGUAGE || 'vi-VN';
 
 function xmlEscape(value) {
@@ -73,7 +74,7 @@ async function readForm(req) {
 }
 
 function normalizeSpeech(value) {
-  return String(value || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function detectLanguage(form) {
@@ -126,7 +127,19 @@ async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
 
   if (req.method === 'GET' && url.pathname === '/health') {
-    sendJson(res, 200, { ok: true, service: 'lanternhouse-ai-desk', publicBaseUrl: PUBLIC_BASE_URL || null, ts: new Date().toISOString() });
+    sendJson(res, 200, {
+      ok: true,
+      service: 'lanternhouse-ai-desk',
+      mode: TWILIO_TEST_MODE ? 'test' : 'production-blocked',
+      managerPhoneConfigured: /^\+\d{10,15}$/.test(TWILIO_MANAGER_PHONE),
+      publicBaseUrl: PUBLIC_BASE_URL || null,
+      ts: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (!TWILIO_TEST_MODE) {
+    sendJson(res, 503, { error: 'production_blocked', message: 'Linh is approved for controlled laboratory testing only.' });
     return;
   }
 
@@ -198,10 +211,10 @@ async function route(req, res) {
 const server = http.createServer((req, res) => {
   route(req, res).catch((error) => {
     console.error(error);
-    sendJson(res, 500, { error: 'internal_error', message: error.message });
+    sendJson(res, 500, { error: 'internal_error' });
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`Lantern House AI Desk listening on port ${PORT}`);
+  console.log(`Lantern House AI Desk listening on port ${PORT} in ${TWILIO_TEST_MODE ? 'test' : 'blocked'} mode`);
 });
