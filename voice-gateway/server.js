@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 const http = require('http');
 const { URL } = require('url');
+const { requestUrl, validateRequest } = require('./twilio-signature');
 
 const env = process.env;
 const PORT = Number(env.PORT || 10000);
 const PUBLIC_BASE_URL = String(env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+const TWILIO_AUTH_TOKEN = env.TWILIO_AUTH_TOKEN || '';
 const TWILIO_MANAGER_PHONE = env.TWILIO_MANAGER_PHONE || '+15717495444';
 const TWILIO_CALLER_ID = env.TWILIO_CALLER_ID || '';
 const VIETNAMESE_LANGUAGE = env.TWILIO_VIETNAMESE_LANGUAGE || 'vi-VN';
@@ -76,6 +78,29 @@ function readBody(req) {
 async function readForm(req) {
   const body = await readBody(req);
   return Object.fromEntries(new URLSearchParams(body).entries());
+}
+
+let warnedMissingAuthToken = false;
+
+/**
+ * Confirm an inbound /twilio/voice* request really came from Twilio.
+ *
+ * Fails open when TWILIO_AUTH_TOKEN is unset so local runs and the test IVR
+ * keep working — an unset token must never silently drop live calls. Once the
+ * token is set, unsigned or mis-signed requests are rejected with 403.
+ */
+function isSignedByTwilio(req, form) {
+  if (!TWILIO_AUTH_TOKEN) {
+    if (!warnedMissingAuthToken) {
+      warnedMissingAuthToken = true;
+      console.warn('TWILIO_AUTH_TOKEN is not set — inbound Twilio requests are NOT signature-verified.');
+    }
+    return true;
+  }
+
+  // Twilio signs POST params; for GET it signs the URL with its query string only.
+  const params = req.method === 'POST' ? form : {};
+  return validateRequest(TWILIO_AUTH_TOKEN, req.headers['x-twilio-signature'], requestUrl(req, PUBLIC_BASE_URL), params);
 }
 
 function normalizeSpeech(value) {
@@ -176,9 +201,25 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === '/twilio/voice' || url.pathname.startsWith('/twilio/voice/')) {
+    // Read the body once here: the signature covers the POST parameters, and the
+    // request stream can only be consumed a single time.
+    const form = req.method === 'POST' ? await readForm(req) : {};
+    if (!isSignedByTwilio(req, form)) {
+      console.warn(`Rejected request with an invalid Twilio signature: ${req.method} ${url.pathname}`);
+      sendJson(res, 403, { error: 'invalid_twilio_signature' });
+      return;
+    }
+    await routeTwilioVoice(req, res, url, form);
+    return;
+  }
+
+  sendJson(res, 404, { error: 'not_found' });
+}
+
+async function routeTwilioVoice(req, res, url, form) {
   if ((req.method === 'GET' || req.method === 'POST') && url.pathname === '/twilio/voice') {
     if (vapiEnabled()) {
-      const form = req.method === 'POST' ? await readForm(req) : {};
       sendXml(res, 200, vapiConnectTwiml(form));
       return;
     }
@@ -192,7 +233,6 @@ async function route(req, res) {
   }
 
   if (req.method === 'POST' && url.pathname === '/twilio/voice/language') {
-    const form = await readForm(req);
     const language = detectLanguage(form);
     sendXml(res, 200, twiml(
       gather({ action: publicAction(`/twilio/voice/location?language=${language}`), prompt: locationPrompt(language), hints: 'Reston,Falls Church', language }) +
@@ -202,7 +242,6 @@ async function route(req, res) {
   }
 
   if (req.method === 'POST' && url.pathname === '/twilio/voice/location') {
-    const form = await readForm(req);
     const language = languageFromUrl(url);
     const location = detectLocation(form);
     if (!location) {
@@ -220,7 +259,6 @@ async function route(req, res) {
   }
 
   if (req.method === 'POST' && url.pathname === '/twilio/voice/intent') {
-    const form = await readForm(req);
     const language = languageFromUrl(url);
     const location = url.searchParams.get('location') || 'the selected location';
     if (shouldTransferToManager(form)) {
