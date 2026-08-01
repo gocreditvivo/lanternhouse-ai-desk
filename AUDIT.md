@@ -169,15 +169,16 @@ Hours and menu remain unverified — see the verdict at the top.
 
 ### Code changes still needed (not in this PR)
 
-| Item | Impact | Effort |
-| --- | --- | --- |
-| Dashboard reads real Supabase data | Owner cannot see calls/orders/bookings in the UI; must use the Supabase table editor or Vapi call logs during the pilot | ~half a day |
-| Login/signup wired to Supabase Auth | Dashboard is effectively public; no owner login exists | ~half a day |
-| `customers` rollup counters | `total_orders`, `total_bookings`, `lifetime_value` are never incremented, so recognition quality will not improve over the pilot | ~1 hour |
-| `messages` table never written | Sent SMS is not logged anywhere, so SMS delivery can't be audited | ~30 min |
-| Menu/hours served from `services` + `business_hours` | AI knowledge is a static string; menu changes require a code deploy | ~half a day |
-| Twilio request-signature validation on the gateway | Anyone can POST to `/twilio/voice`; low risk for a pilot, real for production | ~1 hour |
-| Automated tests | There are none anywhere in the repo | ongoing |
+| Item | Status | Impact | Effort |
+| --- | --- | --- | --- |
+| Dashboard reads real Supabase data | **Still open** | Owner cannot see calls/orders/bookings in the UI; must use the Supabase table editor or Vapi call logs during the pilot | ~half a day |
+| Login/signup wired to Supabase Auth | Done — 2026-08-01 | Real `signInWithPassword` / `signUp`, middleware guards `/dashboard`, signup writes `settings.owner_id` | — |
+| `customers` rollup counters | Done — handled by database triggers | Counters now bump on insert, so caller recognition improves over the pilot | — |
+| `messages` table never written | Done — 2026-08-01 | Every outbound SMS is logged via `sendAndLogSMS`, so delivery can be audited | — |
+| Menu/hours served from `services` + `business_hours` | Done | `business-context.ts` reads live menu and hours per call | — |
+| Twilio request-signature validation on the gateway | Done — 2026-08-01 | `/twilio/voice*` rejects forged requests with 403 when `TWILIO_AUTH_TOKEN` is set | — |
+| Overly-permissive RLS on `bookings` / `orders` | Migration written, **not yet applied** | `allow_anon_update_*` let anyone with the anon key update any booking or order. Run the migration below | ~5 min |
+| Automated tests | Started — 2026-08-01 | Vitest configured with 17 tests covering SMS logging, Twilio signatures, and the RLS migration. Route handlers and UI are still untested | ongoing |
 
 ### RLS review
 
@@ -264,3 +265,30 @@ setting it on Vercel does nothing.
 - **The dashboard shows mock data.** If the owner opens it during the pilot they will see fabricated
   calls and orders, not real ones. Tell them before they look, or they will reasonably conclude the
   system is making things up.
+
+---
+
+## Changelog
+
+### 2026-08-01 — Auth and security hardening
+
+- **Supabase Auth is live.** `/login` and `/signup` call `signInWithPassword` and `signUp` and show
+  inline errors. `src/middleware.ts` guards every `/dashboard` route and redirects anonymous users to
+  `/login`. "Sign Out" now ends the session instead of just navigating home.
+- **`settings.owner_id` is finally populated**, closing the gap called out in the RLS review in
+  section 4. `POST /api/auth/provision-business` links the signed-in user to a business; the first
+  owner to sign up claims `DEFAULT_BUSINESS_ID` rather than creating a duplicate tenant. It reads
+  business details from auth metadata, never from a client-supplied user id, and is idempotent, so
+  accounts created earlier are linked on their next login.
+- **Outbound SMS is logged.** `sendAndLogSMS` writes a `messages` row (with `booking_id` / `order_id`
+  where known) for every send, recording failures as `status: 'failed'`. Log failures are swallowed
+  so a database problem cannot fail a booking or order response.
+- **The gateway verifies Twilio signatures.** `/twilio/voice*` returns 403 on a bad or missing
+  `X-Twilio-Signature` once `TWILIO_AUTH_TOKEN` is set, and fails open with a warning when it is not,
+  so local and test-IVR mode still work. Implemented with node `crypto` rather than the twilio SDK to
+  keep the gateway dependency-free — a missing `npm install` on Render must not take the phone line
+  down at startup. Verified byte-for-byte against `twilio.getExpectedTwilioSignature()`.
+- **Tests exist.** Vitest, 17 tests: `npm test` in `/web`.
+- **Action required:** run `web/src/lib/supabase/migrations/20260801_scope_booking_order_updates.sql`
+  against Supabase. Until it runs, `allow_anon_update_bookings` and `allow_anon_update_orders` still
+  allow anyone holding the public anon key to update any booking or order row.
