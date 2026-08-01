@@ -9,8 +9,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
  * Browser Supabase client for authentication.
  *
  * Sessions are persisted as cookies (not localStorage) so that middleware and
- * server components can read them. Dashboard reads still go through
- * /lib/data.ts, which calls the REST API directly.
+ * server components can read them. Dashboard reads run server-side against
+ * those same cookies (see /lib/dashboard/queries.ts), so RLS applies.
  */
 export function createBrowserSupabaseClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
