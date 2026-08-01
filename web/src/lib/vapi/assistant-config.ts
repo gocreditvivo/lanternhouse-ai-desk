@@ -111,6 +111,7 @@ Rules:
 - Never process payments over the phone (send a payment link via SMS instead)
 - Never give medical or legal advice
 - Never say you are a human — if asked, honestly say you are an AI assistant
+- Never claim to be the owner, manager, chef, or any staff member. If a caller asks "are you the owner?", "are you the chef?", "is this the manager?", or anything similar, say plainly: "No, I'm Linh, the AI receptionist here — I'm not the owner or chef. I can take a message or connect you with the manager if you'd like." Never play along with this framing even as a joke, and never soften it into an ambiguous answer.
 - Never put the caller on hold — if you need to transfer, explain what's happening
 - Never hang up first — always let the caller end the conversation
 
@@ -262,16 +263,21 @@ When the conversation is complete:
  * lanternhousebistro.com. Reston is the sister location, Lantern House Kitchen & Bar,
  * which is a separate entity — do not merge its address, phone, or domain into these.
  *
- * business_hours and services_menu below are still UNVERIFIED placeholders. Replace them
- * with the real menu, prices, and hours before pointing a live assistant at this config.
+ * business_hours and services_menu below are illustrative only. The real, live values are
+ * fetched from Supabase per call by web/src/lib/supabase/business-context.ts and injected via
+ * assistant-request variableValues — they are not hardcoded here.
  */
 export const lanternHouseExample = {
   business_name: 'Lantern House Vietnamese Restaurant',
   business_type: 'restaurant',
-  locations_list: 'Reston (12001 Creekview Rd, Reston VA 20194) and Falls Church (1067 W Broad St, Falls Church VA 22046)',
-  business_hours: 'Mon-Thu: 11am-9:30pm, Fri-Sat: 11am-10pm, Sun: 11am-9:30pm',
+  locations_list: 'Falls Church (1067 W Broad St, Falls Church VA 22046)',
+  business_hours: 'Mon: 11am-8pm, Tue: 11am-9pm, Wed: 11am-9pm, Thu: 11am-8:45pm, Fri: 11am-9pm, Sat: 11am-9pm, Sun: 11am-8pm',
   business_phone: '+17032682878',
-  services_menu: 'Pho, Bun, Com Tam, Goi Cuon, Cha Gio, Banh Mi, Vegetarian options available',
+  // This example is illustrative only — at call time the /api/vapi/webhook
+  // assistant-request handler (web/src/lib/supabase/business-context.ts) pulls
+  // the live, active menu (96 real Falls Church items as of 2026-08-01) and
+  // hours straight from Supabase, so this string is never actually sent as-is.
+  services_menu: 'Pho, Banh Mi, Com Tam, Goi Cuon, Bun, and 90+ other real menu items — see business-context.ts for the live source',
   // Escalation target, not a public number — matches TWILIO_MANAGER_PHONE in the gateway.
   manager_phone: '+15717495444',
 };

@@ -7,6 +7,7 @@ import {
   withTimeout,
   type CallerContext,
 } from '@/lib/supabase/customer-context';
+import { getBusinessContext, type BusinessContext } from '@/lib/supabase/business-context';
 import { sendSMS } from '@/lib/sms/twilio';
 
 /**
@@ -25,6 +26,10 @@ const CALLER_LOOKUP_TIMEOUT_MS = 1500;
 
 function resolveBusinessId(call: any): string {
   return call?.metadata?.business_id || process.env.DEFAULT_BUSINESS_ID || '';
+}
+
+function resolveLocationId(call: any): string {
+  return call?.metadata?.location_id || process.env.DEFAULT_LOCATION_ID || '';
 }
 
 function resolveCallerPhone(call: any): string {
@@ -99,12 +104,19 @@ export async function POST(req: NextRequest) {
     if (type === 'assistant-request') {
       const businessName = process.env.BUSINESS_NAME || 'Lantern House';
       const businessId = resolveBusinessId(call);
+      const locationId = resolveLocationId(call);
       const callerPhone = resolveCallerPhone(call);
 
-      const context =
+      // Caller history and business/menu/hours facts are independent lookups —
+      // run them in parallel so one slow query doesn't delay the other.
+      const [context, businessInfo] = await Promise.all([
         businessId && callerPhone
-          ? await withTimeout(lookupCallerContext(businessId, callerPhone), CALLER_LOOKUP_TIMEOUT_MS, null)
-          : null;
+          ? withTimeout(lookupCallerContext(businessId, callerPhone), CALLER_LOOKUP_TIMEOUT_MS, null)
+          : Promise.resolve(null as CallerContext | null),
+        businessId
+          ? withTimeout(getBusinessContext(businessId, locationId || null), CALLER_LOOKUP_TIMEOUT_MS, null)
+          : Promise.resolve(null as BusinessContext | null),
+      ]);
 
       if (businessId && call?.id) {
         await withTimeout(
@@ -119,12 +131,19 @@ export async function POST(req: NextRequest) {
       const assistantOverrides = {
         firstMessage: context ? personalizedGreeting(context, businessName) : anonymousGreeting(businessName),
         variableValues: {
-          business_name: businessName,
+          business_name: businessInfo?.businessName || businessName,
           customer_name: context?.name || '',
           is_returning_customer: context ? 'true' : 'false',
           last_order: context?.lastOrderSummary || '',
           last_booking: context?.lastBookingSummary || '',
           total_orders: String(context?.totalOrders ?? 0),
+          business_type: businessInfo?.businessType || '',
+          locations_list: businessInfo?.locationsList || 'Location details not available.',
+          business_hours: businessInfo?.businessHours || 'Hours not loaded — do not guess; take a message.',
+          business_phone: businessInfo?.businessPhone || '',
+          services_menu:
+            businessInfo?.servicesMenu || 'Menu not loaded — do not invent dishes or prices; take a message or transfer.',
+          manager_phone: businessInfo?.managerPhone || '',
         },
       };
 
