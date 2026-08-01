@@ -171,14 +171,14 @@ Hours and menu remain unverified — see the verdict at the top.
 
 | Item | Status | Impact | Effort |
 | --- | --- | --- | --- |
-| Dashboard reads real Supabase data | **Still open** | Owner cannot see calls/orders/bookings in the UI; must use the Supabase table editor or Vapi call logs during the pilot | ~half a day |
+| Dashboard reads real Supabase data | Done — 2026-08-01 | Every page is a Server Component querying Supabase under the owner's session, so RLS scopes the results. Settings edits persist | — |
 | Login/signup wired to Supabase Auth | Done — 2026-08-01 | Real `signInWithPassword` / `signUp`, middleware guards `/dashboard`, signup writes `settings.owner_id` | — |
 | `customers` rollup counters | Done — handled by database triggers | Counters now bump on insert, so caller recognition improves over the pilot | — |
 | `messages` table never written | Done — 2026-08-01 | Every outbound SMS is logged via `sendAndLogSMS`, so delivery can be audited | — |
 | Menu/hours served from `services` + `business_hours` | Done | `business-context.ts` reads live menu and hours per call | — |
 | Twilio request-signature validation on the gateway | Done — 2026-08-01 | `/twilio/voice*` rejects forged requests with 403 when `TWILIO_AUTH_TOKEN` is set | — |
 | Overly-permissive RLS on `bookings` / `orders` | Migration written, **not yet applied** | `allow_anon_update_*` let anyone with the anon key update any booking or order. Run the migration below | ~5 min |
-| Automated tests | Started — 2026-08-01 | Vitest configured with 17 tests covering SMS logging, Twilio signatures, and the RLS migration. Route handlers and UI are still untested | ongoing |
+| Automated tests | Started — 2026-08-01 | Vitest configured with 36 tests covering SMS logging, Twilio signatures, the RLS migration, timezone day boundaries, and row normalization. Route handlers and UI are still untested | ongoing |
 
 ### RLS review
 
@@ -262,13 +262,40 @@ setting it on Vercel does nothing.
   owner has advertised "press 3" anywhere, that needs correcting.
 - **No load or concurrency testing has been done.** Behaviour with several simultaneous callers is
   unknown.
-- **The dashboard shows mock data.** If the owner opens it during the pilot they will see fabricated
-  calls and orders, not real ones. Tell them before they look, or they will reasonably conclude the
-  system is making things up.
+- **The dashboard is only as populated as the tables behind it.** It now reads live Supabase data, so
+  what the owner sees is real — but a quiet first week will look like an empty product. Set the
+  expectation that empty tables mean "no calls yet", not "broken".
+- **Status changes from the dashboard depend on the unapplied RLS migration.** Until
+  `20260801_scope_booking_order_updates.sql` runs, owners have no UPDATE policy on `bookings` /
+  `orders`, so confirming a booking or advancing an order silently affects zero rows. The UI reports
+  "the database rejected the update" in that case rather than pretending it saved.
 
 ---
 
 ## Changelog
+
+### 2026-08-01 — Dashboard on live data
+
+- **Every dashboard page now reads Supabase.** Overview, Calls, Bookings, Orders, Customers, and
+  Settings are Server Components that resolve the owner's business from the session
+  (`businesses.settings->>'owner_id' = auth.uid()`) and query through the request's auth cookies, so
+  RLS — not application code — is what scopes the results.
+- **Deleted `src/lib/data.ts`.** It fetched PostgREST from the browser with the *anon key* as the
+  bearer token, which means `auth.uid()` was null and every RLS policy correctly returned zero rows.
+  It also fell back to a hardcoded business UUID via an undocumented `NEXT_PUBLIC_BUSINESS_ID`. The
+  dashboard was not going to work in production regardless of what the tables contained.
+- **Owner writes are real.** Booking confirm/cancel and the order pipeline buttons persist, and the
+  Settings page reads and writes `businesses`, `locations`, `business_hours`, and `services` instead
+  of local mock state. Settings merges into `settings` JSONB and re-asserts `owner_id` from the
+  session, so a merge bug cannot lock an owner out of their own tenant.
+- **Day boundaries respect the business timezone.** "Today" for a New York restaurant used to mean
+  UTC midnight — 8pm ET — which folded the previous evening's dinner rush into today's counts.
+  `zoned-time.ts` resolves local midnight with DST-safe two-pass offset math.
+- **Order quantities render again.** The voice webhook writes `quantity`; the UI read `qty`, so item
+  counts were blank and totals were `NaN`. The query layer accepts both, and coerces `numeric`
+  columns that PostgREST returns as strings.
+- **No business linked yet** is now an explicit empty state rather than a crash or a blank table.
+- Tests: 36 (was 17), adding timezone day-boundary and row-normalization coverage.
 
 ### 2026-08-01 — Auth and security hardening
 
