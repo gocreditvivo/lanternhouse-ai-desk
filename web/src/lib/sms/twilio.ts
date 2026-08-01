@@ -9,6 +9,7 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
 const authToken = process.env.TWILIO_AUTH_TOKEN || '';
 const fromNumber = process.env.TWILIO_PHONE_NUMBER || '';
 
+/** Sends without touching the database. Prefer sendAndLogSMS so the send is auditable. */
 export async function sendSMS(to: string, body: string): Promise<{ success: boolean; sid?: string; error?: string }> {
   if (!accountSid || !authToken || !fromNumber) {
     console.warn('Twilio credentials not configured. SMS not sent.');

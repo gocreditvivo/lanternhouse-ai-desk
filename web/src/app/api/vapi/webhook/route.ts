@@ -8,7 +8,7 @@ import {
   type CallerContext,
 } from '@/lib/supabase/customer-context';
 import { getBusinessContext, type BusinessContext } from '@/lib/supabase/business-context';
-import { sendSMS } from '@/lib/sms/twilio';
+import { sendAndLogSMS } from '@/lib/sms/send-and-log';
 
 /**
  * Vapi Webhook Handler
@@ -192,19 +192,23 @@ export async function POST(req: NextRequest) {
           }
 
           // Create booking
-          const { error: bookingError } = await supabase.from('bookings').insert({
-            business_id: businessId,
-            customer_id: customerId,
-            call_id: await resolveCallRowId(supabase, call?.id),
-            customer_name: parameters.customer_name,
-            customer_phone: parameters.phone,
-            service_name: parameters.service,
-            staff_name: parameters.staff_preference || null,
-            preferred_date: parameters.date,
-            preferred_time: parameters.time,
-            status: 'pending',
-            created_by: 'ai',
-          });
+          const { data: booking, error: bookingError } = await supabase
+            .from('bookings')
+            .insert({
+              business_id: businessId,
+              customer_id: customerId,
+              call_id: await resolveCallRowId(supabase, call?.id),
+              customer_name: parameters.customer_name,
+              customer_phone: parameters.phone,
+              service_name: parameters.service,
+              staff_name: parameters.staff_preference || null,
+              preferred_date: parameters.date,
+              preferred_time: parameters.time,
+              status: 'pending',
+              created_by: 'ai',
+            })
+            .select('id')
+            .single();
 
           if (bookingError) {
             console.error('Booking insert failed:', bookingError);
@@ -213,7 +217,13 @@ export async function POST(req: NextRequest) {
 
           // Send SMS confirmation
           const smsMessage = `Hi ${parameters.customer_name}! Your appointment for ${parameters.service} on ${parameters.date} at ${parameters.time} has been received. We'll confirm shortly. - ${call?.metadata?.business_name || process.env.BUSINESS_NAME || 'Lantern House'}`;
-          await sendSMS(parameters.phone, smsMessage);
+          await sendAndLogSMS({
+            businessId,
+            customerId,
+            bookingId: booking?.id,
+            to: parameters.phone,
+            body: smsMessage,
+          });
 
           return NextResponse.json({ success: true, message: 'Appointment booked' });
         }
@@ -249,18 +259,22 @@ export async function POST(req: NextRequest) {
 
           // Create order
           const items = Array.isArray(parameters.items) ? parameters.items : [];
-          const { error: orderError } = await supabase.from('orders').insert({
-            business_id: businessId,
-            customer_id: customerId,
-            call_id: await resolveCallRowId(supabase, call?.id),
-            order_type: parameters.order_type,
-            customer_name: parameters.customer_name,
-            customer_phone: parameters.phone,
-            items,
-            status: 'pending',
-            special_instructions: parameters.special_instructions || null,
-            created_by: 'ai',
-          });
+          const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert({
+              business_id: businessId,
+              customer_id: customerId,
+              call_id: await resolveCallRowId(supabase, call?.id),
+              order_type: parameters.order_type,
+              customer_name: parameters.customer_name,
+              customer_phone: parameters.phone,
+              items,
+              status: 'pending',
+              special_instructions: parameters.special_instructions || null,
+              created_by: 'ai',
+            })
+            .select('id')
+            .single();
 
           if (orderError) {
             console.error('Order insert failed:', orderError);
@@ -270,7 +284,13 @@ export async function POST(req: NextRequest) {
           // Send SMS confirmation
           const itemCount = items.reduce((sum: number, item: any) => sum + (Number(item?.quantity) || 1), 0);
           const smsMessage = `Hi ${parameters.customer_name}! Your ${parameters.order_type} order for ${itemCount} item(s) has been received. We'll confirm shortly. - ${call?.metadata?.business_name || process.env.BUSINESS_NAME || 'Lantern House'}`;
-          await sendSMS(parameters.phone, smsMessage);
+          await sendAndLogSMS({
+            businessId,
+            customerId,
+            orderId: order?.id,
+            to: parameters.phone,
+            body: smsMessage,
+          });
 
           return NextResponse.json({ success: true, message: 'Order created' });
         }
@@ -283,7 +303,15 @@ export async function POST(req: NextRequest) {
         }
 
         case 'send_sms': {
-          await sendSMS(parameters.phone_number, parameters.message);
+          const businessId = resolveBusinessId(call);
+          if (!businessId) {
+            return NextResponse.json({ error: 'No business_id' }, { status: 400 });
+          }
+          await sendAndLogSMS({
+            businessId,
+            to: parameters.phone_number,
+            body: parameters.message,
+          });
           return NextResponse.json({ success: true });
         }
 

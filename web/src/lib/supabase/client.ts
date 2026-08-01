@@ -1,19 +1,21 @@
-// Supabase client configuration
-// Note: Data fetching now uses direct REST API calls via /lib/data.ts
-// This file is kept for server-side usage (API routes)
-import { createClient } from '@supabase/supabase-js';
+'use client';
+
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Missing Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local');
+/**
+ * Browser Supabase client for authentication.
+ *
+ * Sessions are persisted as cookies (not localStorage) so that middleware and
+ * server components can read them. Dashboard reads still go through
+ * /lib/data.ts, which calls the REST API directly.
+ */
+export function createBrowserSupabaseClient() {
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-});
+export function isSupabaseConfigured(): boolean {
+  return Boolean(supabaseUrl && supabaseAnonKey);
+}

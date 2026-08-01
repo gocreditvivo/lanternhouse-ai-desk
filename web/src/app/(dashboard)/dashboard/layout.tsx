@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Phone, Calendar, UtensilsCrossed, Users,
   Settings, LogOut, Menu, X, Bell, ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -21,6 +22,13 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await createBrowserSupabaseClient().auth.signOut();
+    router.replace('/login');
+    router.refresh();
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -71,13 +79,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-800">
-          <Link
-            href="/"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition"
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition"
           >
             <LogOut className="w-4 h-4" />
             Sign Out
-          </Link>
+          </button>
         </div>
       </aside>
 

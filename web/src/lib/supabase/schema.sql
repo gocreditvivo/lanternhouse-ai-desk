@@ -1,6 +1,10 @@
 -- Voice Receptionist AI — Database Schema
 -- For Supabase (PostgreSQL)
 -- Multi-tenant: businesses table is the root for all data
+--
+-- This file is the initial schema. Changes made after it was first applied live
+-- in ./migrations/, newest last. Apply them in filename order on top of this
+-- file when standing up a new environment.
 
 -- ============================================
 -- 1. BUSINESSES (tenant root)
