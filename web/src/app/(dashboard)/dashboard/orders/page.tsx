@@ -1,60 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Search, Clock, Phone, User, MoreVertical,
-  UtensilsCrossed, Check, X, ChefHat, Package
+  Search, Clock, Phone, MoreVertical, UtensilsCrossed,
+  Check, X, ChefHat, Package
 } from 'lucide-react';
-
-const orders = [
-  {
-    id: 1, name: 'Kevin Tran', phone: '+1 703-555-0198',
-    type: 'pickup', status: 'preparing', time: '12:30 PM', ready: '12:45 PM',
-    items: [
-      { name: 'Pho Tai', qty: 2, modifiers: 'Extra rare beef' },
-      { name: 'Bun Thit Nuong', qty: 1, modifiers: 'No peanuts' },
-      { name: 'Goi Cuon (2 pcs)', qty: 1, modifiers: '' },
-    ],
-    total: 47.50, special: 'Extra nuoc cham please',
-  },
-  {
-    id: 2, name: 'Quang Nguyen', phone: '+1 571-555-0178',
-    type: 'pickup', status: 'confirmed', time: '1:00 PM', ready: '1:20 PM',
-    items: [
-      { name: 'Com Tam Suon', qty: 2, modifiers: '' },
-      { name: 'Tra Da', qty: 3, modifiers: '' },
-    ],
-    total: 32.00, special: '',
-  },
-  {
-    id: 3, name: 'Lisa Wang', phone: '+1 703-555-0145',
-    type: 'delivery', status: 'ready', time: '11:45 AM', ready: 'Ready now',
-    items: [
-      { name: 'Pho Ga', qty: 1, modifiers: 'Extra onions' },
-      { name: 'Cha Gio (2 pcs)', qty: 2, modifiers: '' },
-    ],
-    total: 28.50, special: 'Leave at front door',
-  },
-  {
-    id: 4, name: 'Tom Nguyen', phone: '+1 703-555-0156',
-    type: 'pickup', status: 'completed', time: '11:00 AM', ready: 'Picked up',
-    items: [
-      { name: 'Bun Bo Hue', qty: 1, modifiers: 'Spicy' },
-      { name: 'Banh Mi', qty: 2, modifiers: 'No cilantro' },
-    ],
-    total: 24.00, special: '',
-  },
-  {
-    id: 5, name: 'Sarah Johnson', phone: '+1 571-555-0192',
-    type: 'pickup', status: 'pending', time: '1:30 PM', ready: 'TBD',
-    items: [
-      { name: 'Pho Tai Chin', qty: 1, modifiers: 'Well done beef' },
-      { name: 'Spring Rolls (4 pcs)', qty: 1, modifiers: '' },
-      { name: 'Vietnamese Iced Coffee', qty: 2, modifiers: '' },
-    ],
-    total: 31.50, special: 'Allergy: shellfish',
-  },
-];
+import { fetchOrders, type OrderRow } from '@/lib/data';
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -67,15 +18,43 @@ const statusColors: Record<string, string> = {
 
 const statusFlow = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
 
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  return `${Math.floor(mins / 60)} hr ago`;
+}
+
 export default function OrdersPage() {
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
+  useEffect(() => {
+    fetchOrders().then((data) => {
+      setOrders(data);
+      setLoading(false);
+    }).catch((e) => {
+      console.error('Orders load error:', e);
+      setLoading(false);
+    });
+  }, []);
+
   const filtered = orders.filter((o) => {
     if (filter !== 'all' && o.status !== filter) return false;
-    if (search && !o.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !o.customer_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -114,10 +93,7 @@ export default function OrdersPage() {
           />
         </div>
         {filter !== 'all' && (
-          <button
-            onClick={() => setFilter('all')}
-            className="px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-300"
-          >
+          <button onClick={() => setFilter('all')} className="px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-gray-300">
             Clear filter
           </button>
         )}
@@ -135,24 +111,23 @@ export default function OrdersPage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-gray-900 text-sm">{order.name}</p>
+                      <p className="font-medium text-gray-900 text-sm">{order.customer_name}</p>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[order.status]}`}>
                         {order.status}
                       </span>
                       <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 capitalize">
-                        {order.type}
+                        {order.order_type}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <Phone className="w-3 h-3" />
-                        {order.phone}
+                        {order.customer_phone}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        Ordered {order.time}
+                        {formatTimeAgo(order.created_at)}
                       </span>
-                      <span className="font-medium text-brand-600">{order.ready}</span>
                     </div>
                   </div>
                 </div>
@@ -175,10 +150,10 @@ export default function OrdersPage() {
                 ))}
               </div>
 
-              {order.special && (
+              {order.special_instructions && (
                 <div className="mt-3 pl-13">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-50 text-yellow-800 text-xs">
-                    <span className="font-medium">Note:</span> {order.special}
+                    <span className="font-medium">Note:</span> {order.special_instructions}
                   </div>
                 </div>
               )}

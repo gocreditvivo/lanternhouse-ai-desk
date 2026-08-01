@@ -1,23 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Search, Filter, Download, Phone, PhoneIncoming, PhoneMissed,
-  Clock, MoreVertical, ChevronLeft, ChevronRight, Play
+  Search, Phone, PhoneMissed, Clock, MoreVertical,
+  ChevronLeft, ChevronRight, Play
 } from 'lucide-react';
-
-const calls = [
-  { id: 1, name: 'Linda Nguyen', phone: '+1 571-555-0142', language: 'en', intent: 'booking', duration: '2:34', status: 'completed', time: '10 min ago', outcome: 'Booked gel manicure for 2pm' },
-  { id: 2, name: 'Kevin Tran', phone: '+1 703-555-0198', language: 'vi', intent: 'order', duration: '4:12', status: 'completed', time: '23 min ago', outcome: 'Took pho order for pickup' },
-  { id: 3, name: 'Mai Le', phone: '+1 281-555-0167', language: 'vi', intent: 'booking', duration: '1:45', status: 'completed', time: '41 min ago', outcome: 'Booked full set + pedicure' },
-  { id: 4, name: 'Unknown Caller', phone: '+1 571-555-0233', language: 'en', intent: 'menu_inquiry', duration: '0:58', status: 'completed', time: '1 hr ago', outcome: 'Answered menu questions' },
-  { id: 5, name: 'John Smith', phone: '+1 202-555-0189', language: 'en', intent: 'complaint', duration: '5:23', status: 'transferred', time: '2 hr ago', outcome: 'Transferred to manager' },
-  { id: 6, name: 'Lisa Wang', phone: '+1 703-555-0145', language: 'en', intent: 'booking', duration: '3:01', status: 'completed', time: '3 hr ago', outcome: 'Booked pedicure tomorrow' },
-  { id: 7, name: 'Quang Nguyen', phone: '+1 571-555-0178', language: 'vi', intent: 'catering', duration: '6:45', status: 'completed', time: '4 hr ago', outcome: 'Catering inquiry for 30 people' },
-  { id: 8, name: 'Unknown Caller', phone: '+1 202-555-0167', language: 'en', intent: 'general', duration: '0:00', status: 'missed', time: '5 hr ago', outcome: 'No message left' },
-  { id: 9, name: 'Sarah Johnson', phone: '+1 571-555-0192', language: 'en', intent: 'booking', duration: '2:15', status: 'completed', time: '6 hr ago', outcome: 'Booked pedicure tomorrow 10am' },
-  { id: 10, name: 'Tom Nguyen', phone: '+1 703-555-0156', language: 'vi', intent: 'order', duration: '3:33', status: 'completed', time: '7 hr ago', outcome: 'Took bun thit nuong order' },
-];
+import { fetchCalls, type CallRow } from '@/lib/data';
 
 const intentColors: Record<string, string> = {
   booking: 'bg-brand-100 text-brand-700',
@@ -37,16 +25,52 @@ const statusColors: Record<string, string> = {
   in_progress: 'bg-brand-100 text-brand-700',
 };
 
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  return `${Math.floor(hrs / 24)} day(s) ago`;
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 export default function CallsPage() {
+  const [calls, setCalls] = useState<CallRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [selectedCall, setSelectedCall] = useState<typeof calls[0] | null>(null);
+  const [selectedCall, setSelectedCall] = useState<CallRow | null>(null);
+
+  useEffect(() => {
+    fetchCalls().then((data) => {
+      setCalls(data);
+      setLoading(false);
+    }).catch((e) => {
+      console.error('Calls load error:', e);
+      setLoading(false);
+    });
+  }, []);
 
   const filtered = calls.filter((c) => {
     if (filter !== 'all' && c.status !== filter) return false;
-    if (search && !c.name.toLowerCase().includes(search.toLowerCase()) && !c.phone.includes(search)) return false;
+    if (search && !c.phone_number.includes(search) && !(c.outcome || '').toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -56,7 +80,7 @@ export default function CallsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by name or phone..."
+            placeholder="Search by phone or outcome..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
@@ -107,8 +131,8 @@ export default function CallsPage() {
                         {call.status === 'missed' ? <PhoneMissed className="w-4 h-4 text-red-500" /> : <Phone className="w-4 h-4 text-brand-600" />}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{call.name}</p>
-                        <p className="text-xs text-gray-500">{call.phone}</p>
+                        <p className="text-sm font-medium text-gray-900">{call.phone_number}</p>
+                        <p className="text-xs text-gray-500">{formatTimeAgo(call.created_at)}</p>
                       </div>
                     </div>
                   </td>
@@ -118,14 +142,16 @@ export default function CallsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${intentColors[call.intent] || intentColors.general}`}>
-                      {call.intent.replace('_', ' ')}
-                    </span>
+                    {call.intent && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${intentColors[call.intent] || intentColors.general}`}>
+                        {call.intent.replace('_', ' ')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
                     <span className="text-sm text-gray-600 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {call.duration}
+                      {formatDuration(call.duration_seconds)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -133,7 +159,7 @@ export default function CallsPage() {
                       {call.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 hidden sm:table-cell text-sm text-gray-500">{call.time}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell text-sm text-gray-500">{formatTimeAgo(call.created_at)}</td>
                   <td className="px-4 py-3">
                     <button className="p-1 text-gray-400 hover:text-gray-600">
                       <MoreVertical className="w-4 h-4" />
@@ -145,7 +171,13 @@ export default function CallsPage() {
           </table>
         </div>
 
-        {/* Pagination */}
+        {filtered.length === 0 && (
+          <div className="p-12 text-center">
+            <Phone className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">No calls found</p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between p-4 border-t border-gray-100">
           <p className="text-xs text-gray-500">Showing {filtered.length} of {calls.length} calls</p>
           <div className="flex items-center gap-2">
@@ -174,8 +206,8 @@ export default function CallsPage() {
                   <Phone className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">{selectedCall.name}</p>
-                  <p className="text-sm text-gray-500">{selectedCall.phone}</p>
+                  <p className="font-semibold text-gray-900">{selectedCall.phone_number}</p>
+                  <p className="text-sm text-gray-500">{formatTimeAgo(selectedCall.created_at)}</p>
                 </div>
               </div>
 
@@ -186,11 +218,11 @@ export default function CallsPage() {
                 </div>
                 <div className="p-3 rounded-lg bg-gray-50">
                   <p className="text-xs text-gray-500">Duration</p>
-                  <p className="text-sm font-medium text-gray-900">{selectedCall.duration}</p>
+                  <p className="text-sm font-medium text-gray-900">{formatDuration(selectedCall.duration_seconds)}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-50">
                   <p className="text-xs text-gray-500">Intent</p>
-                  <p className="text-sm font-medium text-gray-900 capitalize">{selectedCall.intent.replace('_', ' ')}</p>
+                  <p className="text-sm font-medium text-gray-900 capitalize">{(selectedCall.intent || 'general').replace('_', ' ')}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-50">
                   <p className="text-xs text-gray-500">Status</p>
@@ -198,48 +230,39 @@ export default function CallsPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-brand-50 border border-brand-100">
-                <p className="text-xs font-medium text-brand-700 mb-1">AI Summary</p>
-                <p className="text-sm text-gray-700">{selectedCall.outcome}</p>
-              </div>
+              {selectedCall.summary && (
+                <div className="p-4 rounded-lg bg-brand-50 border border-brand-100">
+                  <p className="text-xs font-medium text-brand-700 mb-1">AI Summary</p>
+                  <p className="text-sm text-gray-700">{selectedCall.summary}</p>
+                </div>
+              )}
 
-              {/* Audio player placeholder */}
-              <div className="p-4 rounded-lg bg-gray-50">
-                <p className="text-xs font-medium text-gray-500 mb-3">Recording</p>
-                <div className="flex items-center gap-3">
-                  <button className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center hover:bg-brand-700 transition">
-                    <Play className="w-4 h-4 text-white ml-0.5" />
-                  </button>
-                  <div className="flex-1">
-                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full w-0 bg-brand-500 rounded-full" />
-                    </div>
-                    <div className="flex justify-between mt-1 text-xs text-gray-400">
-                      <span>0:00</span>
-                      <span>{selectedCall.duration}</span>
+              {selectedCall.outcome && (
+                <div className="p-4 rounded-lg bg-gray-50">
+                  <p className="text-xs font-medium text-gray-500 mb-1">Outcome</p>
+                  <p className="text-sm text-gray-700">{selectedCall.outcome}</p>
+                </div>
+              )}
+
+              {selectedCall.duration_seconds > 0 && (
+                <div className="p-4 rounded-lg bg-gray-50">
+                  <p className="text-xs font-medium text-gray-500 mb-3">Recording</p>
+                  <div className="flex items-center gap-3">
+                    <button className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center hover:bg-brand-700 transition">
+                      <Play className="w-4 h-4 text-white ml-0.5" />
+                    </button>
+                    <div className="flex-1">
+                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full w-0 bg-brand-500 rounded-full" />
+                      </div>
+                      <div className="flex justify-between mt-1 text-xs text-gray-400">
+                        <span>0:00</span>
+                        <span>{formatDuration(selectedCall.duration_seconds)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Transcript preview */}
-              <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">Transcript Preview</p>
-                <div className="space-y-3">
-                  <div className="p-3 rounded-lg bg-gray-50 text-sm">
-                    <p className="text-xs text-brand-600 font-medium mb-1">Linh (AI)</p>
-                    <p className="text-gray-700">Thank you for calling. This is Linh. How can I help you today?</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-orange-50 text-sm">
-                    <p className="text-xs text-orange-600 font-medium mb-1">Caller</p>
-                    <p className="text-gray-700">Hi, I'd like to book an appointment for a gel manicure.</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-gray-50 text-sm">
-                    <p className="text-xs text-brand-600 font-medium mb-1">Linh (AI)</p>
-                    <p className="text-gray-700">Of course! What day and time works best for you?</p>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

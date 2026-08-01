@@ -1,77 +1,115 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Search, Phone, Mail, Clock, TrendingUp, Users, MoreVertical,
-  X, Calendar, MessageSquare
+  Search, Phone, Mail, Users, TrendingUp, X, Clock
 } from 'lucide-react';
+import { fetchCustomers, type CustomerRow } from '@/lib/data';
 
-const customers = [
-  { id: 1, name: 'Linda Nguyen', phone: '+1 571-555-0142', email: 'linda@email.com', language: 'vi', calls: 12, bookings: 8, orders: 0, ltv: 420.00, lastVisit: '2 days ago' },
-  { id: 2, name: 'Kevin Tran', phone: '+1 703-555-0198', email: 'ktran@email.com', language: 'vi', calls: 5, bookings: 0, orders: 5, ltv: 187.50, lastVisit: '1 day ago' },
-  { id: 3, name: 'Mai Le', phone: '+1 281-555-0167', email: '', language: 'vi', calls: 3, bookings: 3, orders: 0, ltv: 215.00, lastVisit: '5 days ago' },
-  { id: 4, name: 'Sarah Johnson', phone: '+1 571-555-0192', email: 'sarah.j@email.com', language: 'en', calls: 4, bookings: 2, orders: 0, ltv: 95.00, lastVisit: '1 week ago' },
-  { id: 5, name: 'David Kim', phone: '+1 202-555-0189', email: 'dkim@email.com', language: 'en', calls: 2, bookings: 1, orders: 0, ltv: 55.00, lastVisit: '1 week ago' },
-  { id: 6, name: 'Lisa Wang', phone: '+1 703-555-0145', email: 'lisa.w@email.com', language: 'en', calls: 6, bookings: 4, orders: 2, ltv: 312.00, lastVisit: '3 days ago' },
-  { id: 7, name: 'Quang Nguyen', phone: '+1 571-555-0178', email: 'quang@email.com', language: 'vi', calls: 2, bookings: 0, orders: 1, ltv: 280.00, lastVisit: '2 weeks ago' },
-  { id: 8, name: 'Tom Nguyen', phone: '+1 703-555-0156', email: '', language: 'vi', calls: 8, bookings: 0, orders: 6, ltv: 198.00, lastVisit: '4 days ago' },
-  { id: 9, name: 'Emily Davis', phone: '+1 202-555-0144', email: 'emily@email.com', language: 'en', calls: 3, bookings: 3, orders: 0, ltv: 165.00, lastVisit: '1 week ago' },
-  { id: 10, name: 'John Smith', phone: '+1 202-555-0189', email: 'jsmith@email.com', language: 'en', calls: 1, bookings: 0, orders: 0, ltv: 0, lastVisit: 'Today' },
-];
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<typeof customers[0] | null>(null);
+  const [sortBy, setSortBy] = useState<'name' | 'ltv' | 'calls'>('name');
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null);
 
-  const filtered = customers.filter((c) =>
-    !search ||
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search)
-  );
+  useEffect(() => {
+    fetchCustomers().then((data) => {
+      setCustomers(data);
+      setLoading(false);
+    }).catch((e) => {
+      console.error('Customers load error:', e);
+      setLoading(false);
+    });
+  }, []);
+
+  const filtered = customers
+    .filter((c) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (c.name || '').toLowerCase().includes(q) || c.phone_number.includes(q) || (c.email || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => {
+      if (sortBy === 'ltv') return b.lifetime_value - a.lifetime_value;
+      if (sortBy === 'calls') return b.total_calls - a.total_calls;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+  const totalCustomers = customers.length;
+  const totalLTV = customers.reduce((s, c) => s + Number(c.lifetime_value), 0);
+  const avgLTV = totalCustomers > 0 ? totalLTV / totalCustomers : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-2 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-2 mb-2">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="flex items-center gap-2 mb-1">
             <Users className="w-4 h-4 text-brand-600" />
-            <span className="text-xs text-gray-500">Total Customers</span>
+            <p className="text-xs text-gray-500">Total Customers</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">{customers.length}</p>
+          <p className="text-2xl font-bold text-gray-900">{totalCustomers}</p>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-gray-500">Vietnamese Speakers</span>
-          </div>
-          <p className="text-xl font-bold text-gray-900">{customers.filter(c => c.language === 'vi').length}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="flex items-center gap-2 mb-1">
             <TrendingUp className="w-4 h-4 text-green-600" />
-            <span className="text-xs text-gray-500">Total Revenue</span>
+            <p className="text-xs text-gray-500">Total LTV</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">${customers.reduce((s, c) => s + c.ltv, 0).toFixed(0)}</p>
+          <p className="text-2xl font-bold text-gray-900">${totalLTV.toFixed(2)}</p>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-100">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-orange-600" />
-            <span className="text-xs text-gray-500">Avg. LTV</span>
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4 text-purple-600" />
+            <p className="text-xs text-gray-500">Avg LTV</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">${(customers.reduce((s, c) => s + c.ltv, 0) / customers.length).toFixed(0)}</p>
+          <p className="text-2xl font-bold text-gray-900">${avgLTV.toFixed(2)}</p>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search customers by name or phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
-        />
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by name, phone, or email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Sort by:</span>
+          {[
+            { key: 'name' as const, label: 'Name' },
+            { key: 'ltv' as const, label: 'LTV' },
+            { key: 'calls' as const, label: 'Calls' },
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setSortBy(opt.key)}
+              className={`px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                sortBy === opt.key
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:border-brand-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}
@@ -81,129 +119,110 @@ export default function CustomersPage() {
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Customer</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Lang</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Calls</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Bookings</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Orders</th>
-                <th className="text-right text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">LTV</th>
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Last Visit</th>
-                <th className="px-4 py-3"></th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Language</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Calls</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Bookings</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden lg:table-cell">Orders</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">LTV</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 hidden sm:table-cell">Since</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map((customer) => (
                 <tr
                   key={customer.id}
-                  onClick={() => setSelected(customer)}
+                  onClick={() => setSelectedCustomer(customer)}
                   className="hover:bg-gray-50 cursor-pointer transition"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
-                        <span className="text-xs font-bold text-brand-700">
-                          {customer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </span>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xs font-bold">
+                        {(customer.name || customer.phone_number).slice(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{customer.name}</p>
-                        <p className="text-xs text-gray-500">{customer.phone}</p>
+                        <p className="text-sm font-medium text-gray-900">{customer.name || 'Unknown'}</p>
+                        <p className="text-xs text-gray-500">{customer.phone_number}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${customer.language === 'vi' ? 'bg-orange-100 text-orange-600' : 'bg-brand-100 text-brand-600'}`}>
-                      {customer.language}
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${customer.preferred_language === 'vi' ? 'bg-orange-100 text-orange-600' : 'bg-brand-100 text-brand-600'}`}>
+                      {customer.preferred_language}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center text-sm text-gray-600 hidden md:table-cell">{customer.calls}</td>
-                  <td className="px-4 py-3 text-center text-sm text-gray-600 hidden md:table-cell">{customer.bookings}</td>
-                  <td className="px-4 py-3 text-center text-sm text-gray-600 hidden lg:table-cell">{customer.orders}</td>
-                  <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">${customer.ltv.toFixed(0)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{customer.lastVisit}</td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-gray-400 hover:text-gray-600">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell text-sm text-gray-600">{customer.total_calls}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-sm text-gray-600">{customer.total_bookings}</td>
+                  <td className="px-4 py-3 hidden lg:table-cell text-sm text-gray-600">{customer.total_orders}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">${Number(customer.lifetime_value).toFixed(2)}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell text-sm text-gray-500">{formatDate(customer.created_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {filtered.length === 0 && (
+          <div className="p-12 text-center">
+            <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">No customers found</p>
+          </div>
+        )}
       </div>
 
       {/* Customer detail drawer */}
-      {selected && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelected(null)}>
+      {selectedCustomer && (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelectedCustomer(null)}>
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative bg-white w-full max-w-md h-full overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Customer Profile</h2>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600">
+              <h2 className="font-semibold text-gray-900">Customer Details</h2>
+              <button onClick={() => setSelectedCustomer(null)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-5 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center">
-                  <span className="text-lg font-bold text-brand-700">
-                    {selected.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                  </span>
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-lg font-bold">
+                  {(selectedCustomer.name || selectedCustomer.phone_number).slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">{selected.name}</p>
-                  <p className="text-sm text-gray-500">{selected.phone}</p>
+                  <p className="font-semibold text-gray-900 text-lg">{selectedCustomer.name || 'Unknown'}</p>
+                  <p className="text-sm text-gray-500">{selectedCustomer.phone_number}</p>
                 </div>
               </div>
+
+              {selectedCustomer.email && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Mail className="w-4 h-4" />
+                  {selectedCustomer.email}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg bg-gray-50">
                   <p className="text-xs text-gray-500">Language</p>
-                  <p className="text-sm font-medium text-gray-900 uppercase">{selected.language}</p>
+                  <p className="text-sm font-medium text-gray-900 uppercase">{selectedCustomer.preferred_language}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-gray-50">
-                  <p className="text-xs text-gray-500">Last Visit</p>
-                  <p className="text-sm font-medium text-gray-900">{selected.lastVisit}</p>
+                  <p className="text-xs text-gray-500">Customer Since</p>
+                  <p className="text-sm font-medium text-gray-900">{formatDate(selectedCustomer.created_at)}</p>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 rounded-lg bg-brand-50 text-center">
-                  <Phone className="w-4 h-4 text-brand-600 mx-auto mb-1" />
-                  <p className="text-lg font-bold text-gray-900">{selected.calls}</p>
-                  <p className="text-xs text-gray-500">Calls</p>
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500">Total Calls</p>
+                  <p className="text-sm font-medium text-gray-900">{selectedCustomer.total_calls}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-green-50 text-center">
-                  <Calendar className="w-4 h-4 text-green-600 mx-auto mb-1" />
-                  <p className="text-lg font-bold text-gray-900">{selected.bookings}</p>
-                  <p className="text-xs text-gray-500">Bookings</p>
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500">Total Bookings</p>
+                  <p className="text-sm font-medium text-gray-900">{selectedCustomer.total_bookings}</p>
                 </div>
-                <div className="p-3 rounded-lg bg-orange-50 text-center">
-                  <MessageSquare className="w-4 h-4 text-orange-600 mx-auto mb-1" />
-                  <p className="text-lg font-bold text-gray-900">{selected.orders}</p>
-                  <p className="text-xs text-gray-500">Orders</p>
+                <div className="p-3 rounded-lg bg-gray-50">
+                  <p className="text-xs text-gray-500">Total Orders</p>
+                  <p className="text-sm font-medium text-gray-900">{selectedCustomer.total_orders}</p>
                 </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-green-50 border border-green-100">
-                <p className="text-xs text-gray-500">Lifetime Value</p>
-                <p className="text-2xl font-bold text-green-700">${selected.ltv.toFixed(2)}</p>
-              </div>
-
-              {selected.email && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  {selected.email}
+                <div className="p-3 rounded-lg bg-green-50">
+                  <p className="text-xs text-gray-500">Lifetime Value</p>
+                  <p className="text-sm font-medium text-green-700">${Number(selectedCustomer.lifetime_value).toFixed(2)}</p>
                 </div>
-              )}
-
-              <div className="flex gap-2">
-                <button className="flex-1 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition">
-                  Send SMS
-                </button>
-                <button className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition">
-                  View Call History
-                </button>
               </div>
             </div>
           </div>
