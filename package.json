@@ -1,12 +1,16 @@
 {
-  "name": "lanternhouse-ai-desk",
-  "version": "1.0.0",
+  "name": "voice-receptionist-ai",
+  "version": "0.1.0",
   "private": true,
-  "description": "Linh Twilio test gateway for Lantern House AI Desk.",
+  "description": "Bilingual EN/VI AI voice receptionist for Vietnamese nail salons and restaurants.",
+  "workspaces": ["web"],
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js && node --check twilio-url-check.js",
-    "twilio:url": "node twilio-url-check.js"
+    "dev": "cd web && npm run dev",
+    "build": "cd web && npm run build",
+    "start": "cd web && npm start",
+    "gateway:start": "cd voice-gateway && npm start",
+    "gateway:check": "cd voice-gateway && npm run check",
+    "lint": "cd web && npm run lint"
   },
   "engines": {
     "node": ">=18"
