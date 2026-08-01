@@ -13,19 +13,26 @@ async function main() {
   const hasResponse = text.includes('<Response>');
   const hasGather = text.includes('<Gather');
   const hasLocationPrompt = text.includes('Reston or Falls Church');
+  const hasVapiStream = text.includes('<Stream');
+
+  const mode = hasVapiStream ? 'vapi' : 'test-ivr';
+  const modeIsValid = hasVapiStream || (hasGather && hasLocationPrompt);
+  const ok = response.ok && isXml && hasResponse && modeIsValid;
 
   console.log(JSON.stringify({
-    ok: response.ok && isXml && hasResponse && hasGather && hasLocationPrompt,
+    ok,
+    mode,
     status: response.status,
     contentType: response.headers.get('content-type'),
     isXml,
     hasResponse,
     hasGather,
     hasLocationPrompt,
+    hasVapiStream,
     preview: text.slice(0, 240)
   }, null, 2));
 
-  if (!(response.ok && isXml && hasResponse && hasGather && hasLocationPrompt)) {
+  if (!ok) {
     process.exit(1);
   }
 }
