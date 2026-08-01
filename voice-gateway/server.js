@@ -9,6 +9,12 @@ const TWILIO_MANAGER_PHONE = env.TWILIO_MANAGER_PHONE || '+15717495444';
 const TWILIO_CALLER_ID = env.TWILIO_CALLER_ID || '';
 const VIETNAMESE_LANGUAGE = env.TWILIO_VIETNAMESE_LANGUAGE || 'vi-VN';
 
+const VAPI_API_KEY = env.VAPI_API_KEY || '';
+const VAPI_ASSISTANT_ID = env.VAPI_ASSISTANT_ID || '';
+const VAPI_STREAM_URL = env.VAPI_STREAM_URL || 'wss://api.vapi.ai/twilio/inbound_call';
+// Kill switch: set VAPI_ENABLED=false on Render to fall back to the test IVR without a redeploy.
+const vapiEnabled = () => env.VAPI_ENABLED !== 'false' && Boolean(VAPI_API_KEY && VAPI_ASSISTANT_ID);
+
 function xmlEscape(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -122,24 +128,66 @@ function connectedPrompt(location, language) {
   return `Good. Linh test mode is connected for ${location}. Full AI ordering, SMS links, and live menu answers connect after the production voice provider is configured.`;
 }
 
+// Hands the live audio stream to the Vapi assistant. If the stream drops (Vapi down,
+// bad credentials), Twilio continues past <Connect> and we fall through to the IVR.
+function vapiConnectTwiml(form) {
+  const params = [
+    ['assistantId', VAPI_ASSISTANT_ID],
+    ['apiKey', VAPI_API_KEY],
+    ['callerNumber', form.From || ''],
+    ['calledNumber', form.To || ''],
+    ['twilioCallSid', form.CallSid || ''],
+  ]
+    .filter(([, value]) => value)
+    .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}"/>`)
+    .join('');
+
+  return twiml(
+    `<Connect><Stream url="${xmlEscape(VAPI_STREAM_URL)}">${params}</Stream></Connect>` +
+    say('Sorry, our assistant could not pick up. Let me try again.') +
+    `<Redirect method="POST">${xmlEscape(publicAction('/twilio/voice/ivr'))}</Redirect>`
+  );
+}
+
+function testModeIvrTwiml() {
+  return twiml(
+    gather({
+      action: publicAction('/twilio/voice/language'),
+      prompt: 'Thank you for calling Lantern House. This is Linh. For English, stay on the line or press 1. For Vietnamese, press 3.',
+      hints: 'English,Vietnamese,Reston,Falls Church,Lantern House',
+    }) +
+    say('I did not hear a selection. I will continue in English.') +
+    gather({ action: publicAction('/twilio/voice/location?language=en'), prompt: locationPrompt('en'), hints: 'Reston,Falls Church' })
+  );
+}
+
 async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
 
   if (req.method === 'GET' && url.pathname === '/health') {
-    sendJson(res, 200, { ok: true, service: 'lanternhouse-ai-desk', publicBaseUrl: PUBLIC_BASE_URL || null, ts: new Date().toISOString() });
+    sendJson(res, 200, {
+      ok: true,
+      service: 'lanternhouse-ai-desk',
+      mode: vapiEnabled() ? 'vapi' : 'test-ivr',
+      vapiEnabled: vapiEnabled(),
+      publicBaseUrl: PUBLIC_BASE_URL || null,
+      ts: new Date().toISOString(),
+    });
     return;
   }
 
   if ((req.method === 'GET' || req.method === 'POST') && url.pathname === '/twilio/voice') {
-    sendXml(res, 200, twiml(
-      gather({
-        action: publicAction('/twilio/voice/language'),
-        prompt: 'Thank you for calling Lantern House. This is Linh. For English, stay on the line or press 1. For Vietnamese, press 3.',
-        hints: 'English,Vietnamese,Reston,Falls Church,Lantern House',
-      }) +
-      say('I did not hear a selection. I will continue in English.') +
-      gather({ action: publicAction('/twilio/voice/location?language=en'), prompt: locationPrompt('en'), hints: 'Reston,Falls Church' })
-    ));
+    if (vapiEnabled()) {
+      const form = req.method === 'POST' ? await readForm(req) : {};
+      sendXml(res, 200, vapiConnectTwiml(form));
+      return;
+    }
+    sendXml(res, 200, testModeIvrTwiml());
+    return;
+  }
+
+  if ((req.method === 'GET' || req.method === 'POST') && url.pathname === '/twilio/voice/ivr') {
+    sendXml(res, 200, testModeIvrTwiml());
     return;
   }
 

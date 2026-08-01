@@ -62,8 +62,15 @@ npm run dev
 1. Create an account at [vapi.ai](https://vapi.ai)
 2. Create a new assistant
 3. Use the config from `web/src/lib/vapi/assistant-config.ts`
-4. Set the webhook URL to: `https://your-domain.com/api/vapi/webhook`
-5. Buy or import a phone number in Vapi
+4. Set the assistant's Server URL to: `https://your-domain.com/api/vapi/webhook`,
+   enable the `assistant-request`, `function-call`, and `end-of-call-report` server events,
+   and set a server-URL secret matching `VAPI_WEBHOOK_SECRET`
+5. Either buy/import a phone number in Vapi, or point the existing Twilio number at the
+   voice gateway and set `VAPI_API_KEY` + `VAPI_ASSISTANT_ID` there (see `voice-gateway/README.md`)
+6. Set `DEFAULT_BUSINESS_ID` in the web app to the `businesses.id` of the pilot restaurant,
+   otherwise caller recognition and call logging stay off
+
+See [AUDIT.md](AUDIT.md) for the current deploy-readiness status and the remaining launch checklist.
 
 ## Tech Stack
 
