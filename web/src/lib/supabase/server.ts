@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient as createSSRServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 /**
  * Server-side Supabase client using the service role key.
@@ -18,19 +20,36 @@ export function createServerClient() {
 }
 
 /**
- * Get the current user from the session cookie.
+ * Server-side Supabase client bound to the request's auth cookies.
+ * Runs as the signed-in user, so RLS applies.
  */
-export async function getCurrentUser() {
+export function createAuthServerClient() {
   const cookieStore = cookies();
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
+
+  return createSSRServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        } catch {
+          // Server Components cannot set cookies. The middleware refreshes the
+          // session on every request, so ignoring this is safe.
+        }
+      },
     },
   });
+}
 
+/**
+ * Get the current authenticated user, or null.
+ * Uses getUser() rather than getSession() so the token is verified server-side.
+ */
+export async function getCurrentUser() {
   const {
-    data: { session },
-  } = await client.auth.getSession();
-  return session?.user || null;
+    data: { user },
+  } = await createAuthServerClient().auth.getUser();
+  return user;
 }

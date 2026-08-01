@@ -1,11 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { Phone, Mail, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Phone, Mail, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { createBrowserSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+
+    if (!isSupabaseConfigured()) {
+      setError('Sign-in is unavailable: this deployment is missing its Supabase configuration.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+
+      // Links accounts created before owner_id existed; a no-op afterwards.
+      await fetch('/api/auth/provision-business', { method: 'POST' }).catch(() => {});
+
+      const redirectTo = new URLSearchParams(window.location.search).get('redirectTo');
+      router.replace(redirectTo?.startsWith('/dashboard') ? redirectTo : '/dashboard');
+      router.refresh();
+    } catch {
+      setError('Could not reach the server. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen flex">
@@ -35,13 +74,23 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in</h2>
           <p className="text-sm text-gray-500 mb-8">Enter your email and password to access your dashboard.</p>
 
-          <form className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {error && (
+              <p role="alert" className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@business.com"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
                 />
@@ -53,6 +102,10 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full pl-4 pr-10 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
                 />
@@ -76,10 +129,11 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-600 text-white font-medium text-sm hover:bg-brand-700 transition"
+              disabled={submitting}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-600 text-white font-medium text-sm hover:bg-brand-700 transition disabled:opacity-60"
             >
-              Sign In
-              <ArrowRight className="w-4 h-4" />
+              {submitting ? 'Signing in…' : 'Sign In'}
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
 
