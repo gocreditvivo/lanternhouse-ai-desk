@@ -251,18 +251,27 @@ When the conversation is complete:
  * - {{business_type}} — e.g., "restaurant" or "nail salon"
  * - {{locations_list}} — e.g., "Reston, Falls Church"
  * - {{business_hours}} — e.g., "Mon-Thu 11am-9pm, Fri-Sun 11am-10pm"
- * - {{business_phone}} — e.g., "+15717495444"
+ * - {{business_phone}} — e.g., "+17032682878"
  * - {{services_menu}} — list of services or menu items
  * - {{manager_phone}} — phone to transfer to for escalation
- * 
- * Example filled-in config for Lantern House:
+ *
+ * Example filled-in config for Lantern House.
+ *
+ * Falls Church (the pilot site) was confirmed by the owner on 2026-08-01:
+ * 1067 W Broad St, Falls Church VA 22046 · (703) 268-2878 · lanternhouseyt@gmail.com ·
+ * lanternhousebistro.com. Reston is the sister location, Lantern House Kitchen & Bar,
+ * which is a separate entity — do not merge its address, phone, or domain into these.
+ *
+ * business_hours and services_menu below are still UNVERIFIED placeholders. Replace them
+ * with the real menu, prices, and hours before pointing a live assistant at this config.
  */
 export const lanternHouseExample = {
   business_name: 'Lantern House Vietnamese Restaurant',
   business_type: 'restaurant',
-  locations_list: 'Reston (12001 Creekview Rd, Reston VA 20194) and Falls Church (6111 Leesburg Pike, Falls Church VA 22044)',
+  locations_list: 'Reston (12001 Creekview Rd, Reston VA 20194) and Falls Church (1067 W Broad St, Falls Church VA 22046)',
   business_hours: 'Mon-Thu: 11am-9:30pm, Fri-Sat: 11am-10pm, Sun: 11am-9:30pm',
-  business_phone: '+15717495444',
+  business_phone: '+17032682878',
   services_menu: 'Pho, Bun, Com Tam, Goi Cuon, Cha Gio, Banh Mi, Vegetarian options available',
+  // Escalation target, not a public number — matches TWILIO_MANAGER_PHONE in the gateway.
   manager_phone: '+15717495444',
 };

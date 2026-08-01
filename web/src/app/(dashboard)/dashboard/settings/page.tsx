@@ -95,11 +95,11 @@ export default function SettingsPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Phone Number</label>
-              <input type="text" defaultValue="+1 571-749-5444" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400" />
+              <input type="text" defaultValue="+1 703-268-2878" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Website</label>
-              <input type="text" defaultValue="lanternhousevietbistro.com" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400" />
+              <input type="text" defaultValue="lanternhousebistro.com" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Timezone</label>
@@ -133,7 +133,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2 p-3 rounded-lg border border-gray-200">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">Falls Church</p>
-                  <p className="text-xs text-gray-500">6111 Leesburg Pike, Falls Church VA 22044</p>
+                  <p className="text-xs text-gray-500">1067 W Broad St, Falls Church VA 22046</p>
                 </div>
                 <button className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
               </div>

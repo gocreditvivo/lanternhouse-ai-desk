@@ -19,14 +19,14 @@ verified menu, prices, or hours to answer from.** An AI receptionist with no men
 refuse most questions or invent answers, and inventing answers on night one is the fastest way to
 lose the owner's trust.
 
-Two things specifically make an unsupervised main-line launch unsafe tonight:
+The remaining launch risk is now a single item:
 
 1. **The AI has no verified knowledge base.** Menu items, prices, and hours only exist as a
    hardcoded example string (`lanternHouseExample` in `web/src/lib/vapi/assistant-config.ts`). The
    `services` and `business_hours` tables are empty. Guardrails have been tightened in this PR so
    Linh refuses rather than guesses, but that means she will refuse a lot until real data is loaded.
-2. **There is a factual conflict in the location data that nobody has resolved.** See
-   "Blocking data question" below. Right now the AI could give callers the wrong address.
+
+The location-data conflict that was previously blocking has been resolved — see section 3.
 
 ---
 
@@ -131,20 +131,37 @@ These were blocking bugs, not cleanup — without them fixes 1–3 would not hav
 
 ---
 
-## 3. Blocking data question — needs the owner, not a developer
+## 3. Location data conflict — RESOLVED (owner-confirmed 2026-08-01)
 
-The codebase contains **two different Falls Church addresses** and there is no way to tell from the
-code which is correct:
+The codebase previously carried two different Falls Church addresses, and there was no way to tell
+from the code which was correct. The owner has confirmed the pilot location:
 
-- `assistant-config.ts` and the dashboard settings page: **6111 Leesburg Pike, Falls Church VA 22044**
-- The pilot plan document: **1067 W Broad St, Falls Church VA 22046**, phone (703) 268-2878
-- `voice-gateway` manager/transfer number: **+1 571 749 5444**
-- `ALLOWED_ORIGINS` references two domains: `lanternhousevietbistro.com` and `lanternhousekitchenbar.com`
+| Field | Confirmed value |
+| --- | --- |
+| Address | 1067 W Broad St, Falls Church, VA 22046 |
+| Phone | (703) 268-2878 |
+| Email | lanternhouseyt@gmail.com |
+| Website | lanternhousebistro.com |
 
-This looks like two distinct restaurant entities being conflated. **Until the owner confirms which
-address, phone number, and hours belong to the pilot location, Linh can give callers the wrong
-address.** This is the single highest-consequence unresolved item and it costs five minutes to fix —
-it was deliberately not guessed at in this PR.
+The stale address (`6111 Leesburg Pike, Falls Church VA 22044`) has been replaced everywhere it
+appeared, and `assistant-config.ts`'s `business_phone` now uses the confirmed Falls Church line.
+
+What was deliberately **not** changed, because it belongs to the separate Reston entity (Lantern
+House Kitchen & Bar) or to escalation routing rather than to the Falls Church pilot:
+
+- Reston address `12001 Creekview Rd, Reston VA 20194`
+- `lanternhousekitchenbar.com` in `ALLOWED_ORIGINS`
+- `+1 571 749 5444` as `manager_phone` / `TWILIO_MANAGER_PHONE` / the dashboard's Manager Transfer
+  Number — this is the escalation target, not a public-facing number
+
+Two follow-ups for the owner, neither blocking:
+
+- `lanternhousevietbistro.com` is retained in `ALLOWED_ORIGINS` as a legacy alias. Confirm whether
+  it still resolves anywhere; if not, drop it.
+- `ALLOWED_ORIGINS` is documented in `.env.example` but **read by no code** — there is no CORS
+  handling in `server.js`. It is currently documentation only.
+
+Hours and menu remain unverified — see the verdict at the top.
 
 ---
 
@@ -190,8 +207,9 @@ setting it on Vercel does nothing.
 
 ### Owner / operator steps (no code, ~60–90 min)
 
-1. **Resolve the address conflict in section 3.** Confirm the pilot location's exact address, public
-   phone number, and current hours. Nothing else matters if the AI gives out the wrong address.
+1. ~~**Resolve the address conflict.**~~ Done — see section 3. Address, phone, email, and website
+   for the Falls Church pilot are confirmed and now correct in code. **Hours are still unverified**,
+   so confirm those before step 4.
 2. **Create the Supabase project** and run `web/src/lib/supabase/schema.sql` in the SQL editor.
 3. **Insert one `businesses` row** for the pilot restaurant and copy its UUID.
 4. **Create the Vapi assistant.** Paste `systemPrompt` from `assistant-config.ts`, filling in
