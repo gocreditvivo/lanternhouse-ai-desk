@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Phone, Building2, Clock, Save, Plus, Trash2,
-  Check, Settings as SettingsIcon, Bell
+  Check, Settings as SettingsIcon, Bell, Search, ChevronDown, ChevronUp
 } from 'lucide-react';
 import type {
   HoursRow,
@@ -45,6 +45,25 @@ const models = [
   'GPT-4o (Best quality)',
   'Claude 3.5 Sonnet (Natural conversation)',
 ];
+
+// Friendly display labels for menu categories. Anything not listed here
+// falls back to a title-cased version of the raw value.
+const categoryLabels: Record<string, string> = {
+  appetizer: 'Appetizers',
+  pho: 'Phở',
+  rice: 'Rice Dishes',
+  entree: 'Entrées',
+  noodle: 'Noodles',
+  vegetarian: 'Vegetarian',
+  banh_mi: 'Bánh Mì',
+  addon: 'Add-Ons',
+  beverage: 'Beverages',
+};
+
+function categoryLabel(cat: string | null): string {
+  if (!cat) return 'Uncategorized';
+  return categoryLabels[cat] || cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const notificationFields: Array<{ key: keyof NotificationSettings; label: string; desc: string }> = [
   { key: 'new_booking_sms', label: 'New booking (SMS)', desc: 'Get a text when AI books an appointment' },
@@ -106,6 +125,8 @@ export function SettingsClient({ data }: { data: SettingsData }) {
   const [locationId, setLocationId] = useState<string | null>(data.locations[0]?.id ?? null);
   const [week, setWeek] = useState<HoursRow[]>(() => weekFor(data.hours, data.locations[0]?.id ?? null));
   const [serviceList, setServiceList] = useState<ServiceRow[]>(data.services);
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [voice, setVoice] = useState<VoiceSettings>(data.voice);
   const [notifications, setNotifications] = useState<NotificationSettings>(data.notifications);
   const [newLocation, setNewLocation] = useState<{ name: string; address: string } | null>(null);
@@ -136,6 +157,38 @@ export function SettingsClient({ data }: { data: SettingsData }) {
   function updateService(index: number, patch: Partial<ServiceRow>) {
     setServiceList(serviceList.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   }
+
+  function toggleCategory(cat: string) {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  const groupedServices = useMemo(() => {
+    const query = serviceSearch.trim().toLowerCase();
+    const indexed = serviceList.map((s, index) => ({ s, index }));
+    const filtered = query
+      ? indexed.filter(
+          ({ s }) =>
+            s.name.toLowerCase().includes(query) ||
+            (s.name_vi || '').toLowerCase().includes(query)
+        )
+      : indexed;
+    const groups = new Map<string, { s: ServiceRow; index: number }[]>();
+    for (const item of filtered) {
+      const key = item.s.category || '__uncategorized__';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+    return Array.from(groups.entries()).sort((a, b) =>
+      categoryLabel(a[0] === '__uncategorized__' ? null : a[0]).localeCompare(
+        categoryLabel(b[0] === '__uncategorized__' ? null : b[0])
+      )
+    );
+  }, [serviceList, serviceSearch]);
 
   const tabs = [
     { id: 'business', label: 'Business', icon: Building2 },
@@ -411,70 +464,114 @@ export function SettingsClient({ data }: { data: SettingsData }) {
 
       {/* Services tab */}
       {tab === 'services' && (
-        <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4 max-w-2xl">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Services &amp; Pricing</h2>
+        <div className="bg-white rounded-xl border border-gray-100 p-5 space-y-4 max-w-3xl">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-gray-900">Menu &amp; Services</h2>
             <button
               onClick={() =>
                 setServiceList([
                   ...serviceList,
-                  { id: '', name: '', price: 0, duration_minutes: 30, category: null },
+                  { id: '', name: '', name_vi: '', price: 0, duration_minutes: null, category: null },
                 ])
               }
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition"
             >
               <Plus className="w-4 h-4" />
-              Add Service
+              Add Item
             </button>
           </div>
-          <div className="space-y-2">
-            {serviceList.map((s, index) => (
-              <div key={s.id || `new-${index}`} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
-                <div className="flex-1 grid grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Service name"
-                    value={s.name}
-                    onChange={(e) => updateService(index, { name: e.target.value })}
-                    className="px-2 py-1.5 rounded border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
-                  />
-                  <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                    <input
-                      type="number"
-                      value={s.price}
-                      onChange={(e) => updateService(index, { price: Number(e.target.value) || 0 })}
-                      className="w-full pl-6 pr-2 py-1.5 rounded border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
-                    />
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={s.duration_minutes ?? ''}
-                      onChange={(e) =>
-                        updateService(index, {
-                          duration_minutes: e.target.value === '' ? null : Number(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full px-2 py-1.5 rounded border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">min</span>
-                  </div>
+
+          <p className="text-sm text-gray-500">
+            Linh answers calls in English and Vietnamese. Add a Vietnamese name for each item so she can say it
+            correctly to Vietnamese-speaking callers — English-only items still work fine.
+          </p>
+
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search items by English or Vietnamese name..."
+              value={serviceSearch}
+              onChange={(e) => setServiceSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {groupedServices.map(([catKey, items]) => {
+              const label = categoryLabel(catKey === '__uncategorized__' ? null : catKey);
+              const collapsed = collapsedCats.has(catKey);
+              return (
+                <div key={catKey} className="border border-gray-100 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(catKey)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition text-left"
+                  >
+                    <span className="text-sm font-medium text-gray-800">
+                      {label} <span className="text-gray-400 font-normal">({items.length})</span>
+                    </span>
+                    {collapsed ? (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronUp className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                  {!collapsed && (
+                    <div className="p-3 space-y-2">
+                      {items.map(({ s, index }) => (
+                        <div
+                          key={s.id || `new-${index}`}
+                          className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100"
+                        >
+                          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <input
+                              type="text"
+                              placeholder="English name"
+                              value={s.name}
+                              onChange={(e) => updateService(index, { name: e.target.value })}
+                              className="px-2 py-1.5 rounded border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Vietnamese name (optional)"
+                              value={s.name_vi ?? ''}
+                              onChange={(e) => updateService(index, { name_vi: e.target.value })}
+                              className="px-2 py-1.5 rounded border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
+                            />
+                            <div className="relative">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={s.price}
+                                onChange={(e) => updateService(index, { price: Number(e.target.value) || 0 })}
+                                className="w-full pl-6 pr-2 py-1.5 rounded border border-gray-200 text-sm focus:outline-none focus:border-brand-400"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setServiceList(serviceList.filter((_, i) => i !== index))}
+                            aria-label={`Remove ${s.name || 'item'}`}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => setServiceList(serviceList.filter((_, i) => i !== index))}
-                  aria-label={`Remove ${s.name || 'service'}`}
-                  className="text-gray-400 hover:text-red-500"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-            {serviceList.length === 0 && (
-              <p className="text-sm text-gray-500">No services yet. Add one so the AI can quote prices.</p>
+              );
+            })}
+            {groupedServices.length === 0 && (
+              <p className="text-sm text-gray-500">
+                {serviceSearch
+                  ? 'No items match your search.'
+                  : 'No items yet. Add one so the AI can quote prices.'}
+              </p>
             )}
           </div>
-          <SaveButton tabKey="services" label="Save Services" onClick={() => run('services', () => saveServices(serviceList))} />
+          <SaveButton tabKey="services" label="Save Menu" onClick={() => run('services', () => saveServices(serviceList))} />
         </div>
       )}
 

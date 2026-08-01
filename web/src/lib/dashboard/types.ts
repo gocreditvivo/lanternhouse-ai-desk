@@ -122,6 +122,7 @@ export interface HoursRow {
 export interface ServiceRow {
   id: string;
   name: string;
+  name_vi: string | null;
   price: number;
   duration_minutes: number | null;
   category: string | null;

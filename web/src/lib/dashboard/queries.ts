@@ -394,7 +394,7 @@ export async function getSettingsData(business: OwnerBusiness): Promise<Settings
       .eq('business_id', business.id),
     supabase
       .from('services')
-      .select('id, name, price, duration_minutes, category, sort_order')
+      .select('id, name, name_vi, price, duration_minutes, category, sort_order')
       .eq('business_id', business.id)
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
@@ -422,6 +422,7 @@ export async function getSettingsData(business: OwnerBusiness): Promise<Settings
       (row: any): ServiceRow => ({
         id: row.id,
         name: row.name,
+        name_vi: row.name_vi,
         price: toNumber(row.price),
         duration_minutes: row.duration_minutes === null ? null : toNumber(row.duration_minutes),
         category: row.category,

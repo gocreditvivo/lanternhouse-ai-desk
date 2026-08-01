@@ -221,6 +221,7 @@ export async function saveServices(services: ServiceRow[]): Promise<MutationResu
         .from('services')
         .update({
           name: service.name.trim(),
+          name_vi: service.name_vi?.trim() || null,
           price: service.price,
           duration_minutes: service.duration_minutes,
           sort_order: index,
@@ -233,8 +234,10 @@ export async function saveServices(services: ServiceRow[]): Promise<MutationResu
           toInsert.map((service, index) => ({
             business_id: business.id,
             name: service.name.trim(),
+            name_vi: service.name_vi?.trim() || null,
             price: service.price,
             duration_minutes: service.duration_minutes,
+            category: service.category,
             sort_order: toUpdate.length + index,
           }))
         )
