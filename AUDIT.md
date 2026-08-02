@@ -274,6 +274,81 @@ setting it on Vercel does nothing.
 
 ## Changelog
 
+### 2026-08-01 — Retell trains on customer data; spec added to `docs/`
+
+No code changed in this entry. Two findings and one document drop.
+
+**1. The voice platform trains on our callers' data, and the published opt-out is unusable for us.**
+
+Open question OQ-2 in the spec asked whether Retell trains on customer data. It does, and it says so
+in its own Terms of Service (last updated 2026-06-01):
+
+> "If you do not opt-out of recording, you give Retell AI permission to record calls made using the
+> Service and process communication data ('Communications') and User Content for offering AI-powered
+> analytics and the development, training, and improvement of artificial intelligence and machine
+> learning models that are included in the Service."
+
+The privacy policy (2026-07-20) repeats it: "to train the artificial intelligence models that support
+our Services."
+
+The problem is the shape of the opt-out. The **only** opt-out named in the contract is opting out of
+**recording** — and we cannot opt out of recording, because the all-party consent artifact is a P0
+and recordings are the evidence a Maryland claim would be defended with. Maryland is felony-grade at
+up to 5 years and $10,000 plus a mandatory $500 civil fine. So the contractual escape hatch and the
+compliance design are mutually exclusive as written.
+
+There is no product control to fall back on. Retell's Data Storage Settings offers three modes —
+Everything, Everything except PII, Basic Attributes Only — and none of them mention training. Neither
+does the retention page or the compliance page.
+
+Also worth flagging from the same read: **Retell's default retention is "Keep forever."** Per-agent
+retention is configurable from 1 day to 2 years, but nobody gets the tight default by doing nothing.
+When a Retell account is provisioned, set retention explicitly as part of provisioning, not later.
+
+Consequences recorded in the spec: the binding no-training commitment (section 10.3 item 7) is now
+marked **BLOCKED** and must not appear in sales material until this closes; OQ-2 is reframed from "do
+they train" to "can training be disabled while recording stays on"; and R7 gains a fifth Option B
+migration trigger. A written request to Retell is drafted at `docs/retell-training-data-request.md`,
+not yet sent.
+
+**2. The code is on Vapi. The spec selects Retell. That divergence has never been closed.**
+
+There are zero mentions of Retell anywhere in this repo. Seventeen files reference Vapi, including
+`web/src/lib/vapi/assistant-config.ts`, `web/src/lib/vapi/bridge.ts`,
+`web/src/app/api/vapi/webhook/route.ts`, and the `vapi_assistant_id` column in
+`web/src/lib/supabase/schema.sql`.
+
+Spec section 9.8 selects Retell over Vapi and explicitly supersedes the line in
+`build-prompts-customized.md` that named Vapi. That decision was made on paper and never landed in
+code.
+
+This matters more than a naming inconsistency, because on the specific question above **Vapi is the
+worse of the two**: by default it records calls and stores logs and transcriptions "aimed at
+continuously improving the quality of our service," and a third-party assessment reports training on
+business-tier data unless you opt out. Turning that off is not free either — HIPAA mode requires an
+Enterprise subscription or a paid add-on, reported at roughly $1,000/month, org-level, all-or-nothing,
+and mutually exclusive with Zero Data Retention.
+
+So the platform actually running today trains on customer data and charges to stop, while the platform
+the spec chose trains on customer data and is still being asked whether it will stop. Neither is
+settled. **Per owner decision 2026-08-01, this is logged here and not being migrated yet** — no issue,
+no PR. Do not treat the Retell selection as implemented when reading the spec against this codebase.
+
+Migration surface when it does happen, so it is not re-derived later: the 17 Vapi files, the webhook
+payload shape in `api/vapi/webhook/route.ts`, the assistant config generator, and a schema migration
+renaming `vapi_assistant_id` to `assistant_id` with an `assistant_provider` column alongside it (spec
+section 13).
+
+**3. Specification added to the repo.**
+
+- `docs/booking-ordering-spec.md` — the build-ready feature spec. 18 sections, 56 P0 requirements with
+  Given/When/Then acceptance criteria, POS adapter interface, compliance section, top-5 benchmark,
+  data model DDL, rollout plan.
+- `docs/retell-training-data-request.md` — the drafted written request to Retell.
+
+The spec is the source of truth for intent; this file remains the source of truth for what is actually
+built. Where they disagree, finding 2 above is the current example.
+
 ### 2026-08-01 — Dashboard on live data
 
 - **Every dashboard page now reads Supabase.** Overview, Calls, Bookings, Orders, Customers, and

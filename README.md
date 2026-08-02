@@ -72,11 +72,23 @@ npm run dev
 
 See [AUDIT.md](AUDIT.md) for the current deploy-readiness status and the remaining launch checklist.
 
+## Documentation
+
+- **[docs/booking-ordering-spec.md](docs/booking-ordering-spec.md)** — build-ready feature spec for the
+  salon booking and restaurant ordering modules. 18 sections, 56 P0 requirements with Given/When/Then
+  acceptance criteria, the POS adapter interface and tiering, the compliance section, a top-5
+  competitor compliance benchmark, data model DDL, and the rollout plan.
+- **[docs/retell-training-data-request.md](docs/retell-training-data-request.md)** — drafted written
+  request to Retell on model training over customer call data (spec OQ-2). Not yet sent.
+
+The spec is the source of truth for **intent**. `AUDIT.md` is the source of truth for **what is
+actually built**. They currently disagree on the voice platform — see the 2026-08-01 changelog entry.
+
 ## Tech Stack
 
 - **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
 - **Database**: Supabase (PostgreSQL)
-- **Voice AI**: Vapi
+- **Voice AI**: Vapi *(spec section 9.8 selects Retell; not yet migrated — see [AUDIT.md](AUDIT.md))*
 - **Telephony**: Twilio (existing gateway preserved)
 - **Hosting**: Vercel (web) + Render (voice gateway)
 
