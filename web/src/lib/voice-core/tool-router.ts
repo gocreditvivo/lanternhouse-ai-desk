@@ -1,7 +1,11 @@
+import type { BookingAdapter } from '@/lib/booking/types';
 import type { PosAdapter } from '@/lib/pos/types';
 import type { LinhCallContext, LinhSideEffects, LinhToolRequest, LinhToolResult } from './types';
 
-function hasUnverifiedPrice(adapterMenu: Awaited<ReturnType<PosAdapter['getMenu']>>, request: Extract<LinhToolRequest, { type: 'create_order' }>): boolean {
+function hasUnverifiedPrice(
+  adapterMenu: Awaited<ReturnType<PosAdapter['getMenu']>>,
+  request: Extract<LinhToolRequest, { type: 'create_order' }>,
+): boolean {
   return request.order.lines.some((line) => {
     const item = adapterMenu.find((entry) => entry.id === line.menuItemId);
     if (!item) return false;
@@ -14,6 +18,7 @@ export async function executeLinhTool(
   context: LinhCallContext,
   deps: {
     pos: PosAdapter;
+    booking: BookingAdapter;
     sideEffects: LinhSideEffects;
   },
 ): Promise<LinhToolResult> {
@@ -69,6 +74,45 @@ export async function executeLinhTool(
 
       const order = await deps.pos.createOrder(context.locationId, request.order);
       return { ok: true, type: 'create_order', order };
+    }
+
+    if (request.type === 'book_appointment') {
+      if (!deps.booking.capabilities.createBooking) {
+        return {
+          ok: false,
+          code: 'unsupported_capability',
+          message: 'The connected booking system does not support booking creation.',
+        };
+      }
+      if (!context.locationId) {
+        return { ok: false, code: 'invalid_request', message: 'Location is required to create a booking.' };
+      }
+
+      const services = await deps.booking.getServices(context.locationId);
+      const service = services.find((entry) => entry.id === request.booking.serviceId && entry.active);
+      if (!service) {
+        return { ok: false, code: 'invalid_request', message: 'Unknown or inactive booking service.' };
+      }
+
+      if (deps.booking.capabilities.liveAvailability) {
+        const slots = await deps.booking.getAvailability(
+          context.locationId,
+          request.booking.serviceId,
+          request.booking.startIso,
+          request.booking.staffId,
+        );
+        const slotExists = slots.some((slot) => slot.startIso === request.booking.startIso);
+        if (!slotExists) {
+          return {
+            ok: false,
+            code: 'invalid_request',
+            message: 'That time is no longer available. Linh must offer another time.',
+          };
+        }
+      }
+
+      const booking = await deps.booking.createBooking(context.locationId, request.booking);
+      return { ok: true, type: 'book_appointment', booking };
     }
 
     if (request.type === 'transfer_call') {
