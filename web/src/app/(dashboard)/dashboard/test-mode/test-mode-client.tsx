@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import type { LinhTrainingScenario } from '@/lib/training/types';
-import { runTestModeScenarioAction } from './actions';
+import { confirmTestModeScenarioAction, runTestModeScenarioAction } from './actions';
 
 type RunResult = Awaited<ReturnType<typeof runTestModeScenarioAction>>;
 
@@ -13,9 +13,21 @@ export default function TestModeClient({ scenarios }: { scenarios: LinhTrainingS
   const [pending, startTransition] = useTransition();
   const scenario = useMemo(() => scenarios.find((item) => item.id === scenarioId), [scenarioId, scenarios]);
 
-  function run(confirmed: boolean) {
+  function run() {
     startTransition(async () => {
-      const next = await runTestModeScenarioAction(scenarioId, confirmed);
+      const next = await runTestModeScenarioAction(scenarioId);
+      setResult(next);
+      setHistory((current) => [next, ...current].slice(0, 12));
+    });
+  }
+
+  function confirmExactAction() {
+    if (!result?.confirmationId || !result.proposedAction) return;
+    const displayedScenarioId = result.scenario.id;
+    const displayedConfirmationId = result.confirmationId;
+    const displayedAction = result.proposedAction;
+    startTransition(async () => {
+      const next = await confirmTestModeScenarioAction(displayedScenarioId, displayedConfirmationId, displayedAction);
       setResult(next);
       setHistory((current) => [next, ...current].slice(0, 12));
     });
@@ -38,7 +50,7 @@ export default function TestModeClient({ scenarios }: { scenarios: LinhTrainingS
           {scenario && <p className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">{scenario.callerText}</p>}
         </div>
         <div className="flex items-end gap-2">
-          <button disabled={pending || !scenarioId} onClick={() => run(false)} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Run observation</button>
+          <button disabled={pending || !scenarioId} onClick={run} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Run observation</button>
         </div>
       </section>
 
@@ -61,11 +73,11 @@ export default function TestModeClient({ scenarios }: { scenarios: LinhTrainingS
 
           {result.audit.failureReason && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800"><strong>Failure reason:</strong> {result.audit.failureReason}</div>}
 
-          {result.confirmationRequired && result.proposedAction && (
+          {result.confirmationRequired && result.proposedAction && result.confirmationId && (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
               <div className="text-sm font-semibold text-blue-900">Exact action confirmation required</div>
               <pre className="mt-2 overflow-auto whitespace-pre-wrap text-xs text-blue-900">{JSON.stringify(result.proposedAction, null, 2)}</pre>
-              <button disabled={pending} onClick={() => run(true)} className="mt-3 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirm this exact synthetic action</button>
+              <button disabled={pending} onClick={confirmExactAction} className="mt-3 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirm this exact synthetic action</button>
             </div>
           )}
 
