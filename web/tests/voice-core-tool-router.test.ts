@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mockBookingAdapter } from '../src/lib/booking/mock';
 import { mockPosAdapter } from '../src/lib/pos/mock';
 import { executeLinhTool } from '../src/lib/voice-core/tool-router';
 
@@ -15,12 +16,18 @@ const baseContext = {
   callerConfirmedAction: true,
 };
 
+const deps = {
+  pos: mockPosAdapter,
+  booking: mockBookingAdapter,
+  sideEffects,
+};
+
 describe('executeLinhTool', () => {
   it('requires caller confirmation before side effects', async () => {
     const result = await executeLinhTool(
       { type: 'transfer_call', targetPhone: '+15717495444' },
       { ...baseContext, callerConfirmedAction: false },
-      { pos: mockPosAdapter, sideEffects },
+      deps,
     );
 
     expect(result).toEqual({
@@ -42,7 +49,7 @@ describe('executeLinhTool', () => {
         },
       },
       baseContext,
-      { pos: mockPosAdapter, sideEffects },
+      deps,
     );
 
     expect(result).toEqual({
@@ -62,10 +69,50 @@ describe('executeLinhTool', () => {
         },
       },
       baseContext,
-      { pos: mockPosAdapter, sideEffects },
+      deps,
     );
 
     expect(result).toMatchObject({ ok: false, code: 'invalid_request' });
+  });
+
+  it('creates a confirmed synthetic booking only when the slot exists', async () => {
+    const result = await executeLinhTool(
+      {
+        type: 'book_appointment',
+        booking: {
+          serviceId: 'mock-table-reservation',
+          customerName: 'Synthetic Customer',
+          customerPhone: '+17035550198',
+          startIso: '2026-08-16T17:00:00.000Z',
+        },
+      },
+      baseContext,
+      deps,
+    );
+
+    expect(result).toMatchObject({ ok: true, type: 'book_appointment' });
+  });
+
+  it('rejects a booking time that is not available', async () => {
+    const result = await executeLinhTool(
+      {
+        type: 'book_appointment',
+        booking: {
+          serviceId: 'mock-table-reservation',
+          customerName: 'Synthetic Customer',
+          customerPhone: '+17035550198',
+          startIso: '2026-08-16T21:00:00.000Z',
+        },
+      },
+      baseContext,
+      deps,
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'invalid_request',
+      message: 'That time is no longer available. Linh must offer another time.',
+    });
   });
 
   it('allows confirmed transfer and SMS side effects', async () => {
@@ -75,12 +122,12 @@ describe('executeLinhTool', () => {
     const transfer = await executeLinhTool(
       { type: 'transfer_call', targetPhone: '+15717495444' },
       baseContext,
-      { pos: mockPosAdapter, sideEffects },
+      deps,
     );
     const sms = await executeLinhTool(
       { type: 'send_sms', to: '+17035550198', body: 'Your reservation request was received.' },
       baseContext,
-      { pos: mockPosAdapter, sideEffects },
+      deps,
     );
 
     expect(transfer).toEqual({ ok: true, type: 'transfer_call' });
