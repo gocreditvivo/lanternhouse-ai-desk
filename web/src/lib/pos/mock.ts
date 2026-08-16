@@ -17,58 +17,54 @@ const capabilities: PosCapabilities = {
 const menu: PosMenuItem[] = [
   {
     id: 'mock-pho-tai',
-    name: 'Pho Tai',
-    nameVi: 'Phở Tái',
-    category: 'Pho',
-    priceCents: 0,
+    name: 'Synthetic Pho Tai',
+    nameVi: 'Phở Tái Giả Lập',
+    category: 'Synthetic Menu',
+    priceCents: 1200,
     available: true,
-    description: 'Synthetic pilot item. Price intentionally unset until owner verification.',
+    description: 'Fictional Test Mode item. Price is synthetic and must never be represented as a real business price.',
     modifiers: [
       {
         id: 'mock-pho-size',
-        name: 'Size',
+        name: 'Synthetic size',
         required: true,
         minSelections: 1,
         maxSelections: 1,
         options: [
           { id: 'mock-size-regular', name: 'Regular', priceDeltaCents: 0, available: true },
-          { id: 'mock-size-large', name: 'Large', priceDeltaCents: 0, available: true },
+          { id: 'mock-size-large', name: 'Large', priceDeltaCents: 200, available: true },
         ],
       },
       {
         id: 'mock-pho-notes',
-        name: 'Common requests',
+        name: 'Synthetic requests',
         required: false,
         maxSelections: 2,
         options: [
           { id: 'mock-no-onion', name: 'No onion', priceDeltaCents: 0, available: true },
-          { id: 'mock-extra-herbs', name: 'Extra herbs', priceDeltaCents: 0, available: true },
+          { id: 'mock-extra-herbs', name: 'Extra herbs', priceDeltaCents: 50, available: true },
         ],
       },
     ],
   },
   {
-    id: 'mock-spring-rolls',
-    name: 'Spring Rolls',
-    nameVi: 'Gỏi Cuốn',
-    category: 'Appetizers',
+    id: 'mock-unverified-special',
+    name: 'Synthetic Unverified Special',
+    category: 'Synthetic Menu',
     priceCents: 0,
     available: true,
-    description: 'Synthetic pilot item. Price intentionally unset until owner verification.',
+    description: 'Deliberately unverified synthetic price for failure-path testing.',
   },
 ];
 
 function calculateTotal(order: PosOrderDraft): number {
   return order.lines.reduce((total, line) => {
     const item = menu.find((entry) => entry.id === line.menuItemId);
-    if (!item) throw new Error(`Unknown mock menu item: ${line.menuItemId}`);
-    if (!item.available) throw new Error(`Unavailable mock menu item: ${line.menuItemId}`);
-
+    if (!item) throw new Error('Unknown synthetic menu item');
     const modifiers = line.modifierOptionIds ?? [];
     const modifierTotal = item.modifiers?.flatMap((group) => group.options)
       .filter((option) => modifiers.includes(option.id))
       .reduce((sum, option) => sum + (option.priceDeltaCents ?? 0), 0) ?? 0;
-
     return total + (item.priceCents + modifierTotal) * line.quantity;
   }, 0);
 }
@@ -76,32 +72,23 @@ function calculateTotal(order: PosOrderDraft): number {
 export const mockPosAdapter: PosAdapter = {
   provider: 'mock',
   capabilities,
-
   async getLocations() {
-    return [{ id: 'lantern-house-falls-church', name: 'Lantern House Falls Church' }];
+    return [{ id: 'lantern-house-falls-church', name: 'Synthetic Falls Church Pilot Location' }];
   },
-
   async getMenu(locationId) {
     if (locationId !== 'lantern-house-falls-church') return [];
     return menu.map((item) => structuredClone(item));
   },
-
   async getItemAvailability(locationId, menuItemId) {
     if (locationId !== 'lantern-house-falls-church') return false;
     return menu.find((item) => item.id === menuItemId)?.available ?? false;
   },
-
   async createOrder(locationId, order): Promise<PosOrderResult> {
-    if (locationId !== 'lantern-house-falls-church') {
-      throw new Error('Unknown mock location');
-    }
-    if (order.lines.length === 0) throw new Error('Order must contain at least one item');
-
-    const totalCents = calculateTotal(order);
+    if (locationId !== 'lantern-house-falls-church') throw new Error('Unknown synthetic location');
     return {
-      externalOrderId: `mock-${Date.now()}`,
+      externalOrderId: `test-order-${Date.now()}`,
       status: 'received',
-      totalCents,
+      totalCents: calculateTotal(order),
       currency: 'USD',
     };
   },
