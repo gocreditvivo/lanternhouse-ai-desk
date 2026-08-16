@@ -11,7 +11,7 @@ export const pilotConfig: PilotDeploymentConfig = {
   businessId: 'lantern-house-test',
   locationId: 'lantern-house-falls-church',
   timezone: 'America/New_York',
-  transferDestinations: { manager: '+17035550101' },
+  transferDestinationKeys: ['manager'],
   smsMaxLength: 320,
 };
 
@@ -40,10 +40,7 @@ function syntheticObservation(scenario: LinhTrainingScenario): LinhTrainingObser
     askedForConfirmation: Boolean(scenario.requiresConfirmation),
     escalated: Boolean(scenario.mustEscalate),
   };
-
-  if (scenario.id === 'unknown-price-escalation') {
-    return { ...base, rawResponse: 'I cannot verify that price from the current business data, so I need a manager to confirm it.' };
-  }
+  if (scenario.id === 'unknown-price-escalation') return { ...base, rawResponse: 'I cannot verify that price from the current business data, so I need a manager to confirm it.' };
   if (scenario.language === 'vi') return { ...base, rawResponse: 'Dạ, em đã hiểu yêu cầu và sẽ xác nhận trước khi thực hiện trong Test Mode.' };
   if (scenario.language === 'mixed') return { ...base, rawResponse: 'Dạ, I got it. Em sẽ confirm the details before any simulated action.' };
   return { ...base, rawResponse: 'I understand the request and will confirm the details before any simulated action.' };
@@ -51,23 +48,19 @@ function syntheticObservation(scenario: LinhTrainingScenario): LinhTrainingObser
 
 function actionForScenario(scenario: LinhTrainingScenario): PilotActionPayload | undefined {
   if (scenario.expectedIntent === 'create_order') {
+    const quantity = typeof scenario.expectedEntities?.quantity === 'number' ? scenario.expectedEntities.quantity : 1;
     return {
       type: 'create_order',
       order: {
         fulfillment: 'pickup',
         customerName: 'Synthetic Customer',
         customerPhone: '+17035550198',
-        lines: [{ menuItemId: 'mock-pho-tai', quantity: 1, modifierOptionIds: ['mock-size-regular', 'mock-no-onion'] }],
+        lines: [{ menuItemId: 'mock-pho-tai', quantity, modifierOptionIds: ['mock-size-regular', 'mock-no-onion'] }],
       },
     };
   }
-  if (scenario.expectedIntent === 'book_appointment') {
-    return undefined;
-  }
   if (scenario.expectedIntent === 'transfer_call') return { type: 'transfer_call', destinationKey: 'manager' };
-  if (scenario.expectedIntent === 'send_sms') {
-    return { type: 'send_sms', to: '+17035550198', body: 'Synthetic Test Mode confirmation.', transactional: true, consentRecorded: false };
-  }
+  if (scenario.expectedIntent === 'send_sms') return { type: 'send_sms', to: '+17035550198', body: 'Synthetic Test Mode confirmation.', transactional: true, consentRecorded: false };
   return undefined;
 }
 
@@ -118,7 +111,7 @@ export async function runSyntheticScenario(scenarioId: string, confirmed = false
   }
 
   const blockedForConfirmation = Boolean(proposedAction && !confirmed);
-  const failed = !score.passed || (toolResult && !toolResult.ok);
+  const failed = !score.passed || Boolean(toolResult && !toolResult.ok);
   const audit: PilotAuditRecord = {
     id: `${scenario.id}-${Date.now()}`,
     scenarioId: scenario.id,
