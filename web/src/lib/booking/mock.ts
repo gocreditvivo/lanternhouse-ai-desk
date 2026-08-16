@@ -86,6 +86,7 @@ export const mockBookingAdapter: BookingAdapter = {
     if (locationId !== LOCATION_ID) throw new Error('Unknown mock location');
     const service = services.find((entry) => entry.id === request.serviceId && entry.active);
     if (!service) throw new Error('Unknown or inactive booking service');
+    if (!request.customerName.trim() || !request.customerPhone.trim()) throw new Error('Customer name and phone are required');
     return {
       externalBookingId: `test-booking-${request.startIso}`,
       status: 'received',
