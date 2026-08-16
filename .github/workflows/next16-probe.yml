@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm install --workspace web next@16.3.1 eslint-config-next@16.3.1 --no-save
+      - run: npm install --workspace web next@16.3.1 eslint@9.39.1 eslint-config-next@16.3.1 --no-save
       - run: npm --workspace web test
       - run: npm --workspace web run typecheck
       - run: npm --workspace web run lint
