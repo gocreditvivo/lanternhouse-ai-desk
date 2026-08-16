@@ -64,17 +64,8 @@ function actionForScenario(scenario: LinhTrainingScenario): PilotActionPayload |
   return undefined;
 }
 
-export function listTestModeScenarios(): LinhTrainingScenario[] {
-  return buildCoreTrainingScenarios();
-}
-
-export async function runSyntheticScenario(scenarioId: string, confirmed = false): Promise<TestModeRun> {
-  const scenario = listTestModeScenarios().find((item) => item.id === scenarioId);
-  if (!scenario) throw new Error('Unknown synthetic scenario');
-  const observation = syntheticObservation(scenario);
-  const score = scoreTrainingObservation(scenario, observation);
+async function buildScenarioAction(scenario: LinhTrainingScenario): Promise<PilotActionPayload | undefined> {
   let proposedAction = actionForScenario(scenario);
-
   if (scenario.expectedIntent === 'book_appointment') {
     const target = new Date(Date.now() + 3 * 24 * 60 * 60_000);
     const slots = await mockBookingAdapter.getAvailability(pilotConfig.locationId, 'mock-table-reservation', target.toISOString());
@@ -91,38 +82,79 @@ export async function runSyntheticScenario(scenarioId: string, confirmed = false
       };
     }
   }
+  return proposedAction;
+}
 
-  let confirmationId: string | undefined;
-  let toolResult: TestModeRun['toolResult'];
-  if (proposedAction && confirmed) {
-    confirmationId = issuePilotConfirmation(proposedAction, pilotConfig).id;
-    toolResult = await executeLinhTool(
-      proposedAction,
-      {
-        businessId: pilotConfig.businessId,
-        locationId: pilotConfig.locationId,
-        callerPhone: '+17035550199',
-        language: scenario.language,
-        confirmationId,
-        idempotencyKey: `${scenario.id}-${confirmationId}`,
-      },
-      { pos: mockPosAdapter, booking: mockBookingAdapter, sideEffects: noOpSideEffects, config: pilotConfig },
-    );
-  }
+export function listTestModeScenarios(): LinhTrainingScenario[] {
+  return buildCoreTrainingScenarios();
+}
 
-  const blockedForConfirmation = Boolean(proposedAction && !confirmed);
-  const failed = !score.passed || Boolean(toolResult && !toolResult.ok);
+function baseScenario(scenarioId: string): { scenario: LinhTrainingScenario; observation: LinhTrainingObservation; score: ReturnType<typeof scoreTrainingObservation> } {
+  const scenario = listTestModeScenarios().find((item) => item.id === scenarioId);
+  if (!scenario) throw new Error('Unknown synthetic scenario');
+  const observation = syntheticObservation(scenario);
+  const score = scoreTrainingObservation(scenario, observation);
+  return { scenario, observation, score };
+}
+
+export async function prepareSyntheticScenario(scenarioId: string): Promise<TestModeRun> {
+  const { scenario, observation, score } = baseScenario(scenarioId);
+  const proposedAction = await buildScenarioAction(scenario);
+  const confirmationId = proposedAction ? issuePilotConfirmation(proposedAction, pilotConfig).id : undefined;
+  const confirmationRequired = Boolean(proposedAction);
+  const failed = !score.passed;
   const audit: PilotAuditRecord = {
     id: `${scenario.id}-${Date.now()}`,
     scenarioId: scenario.id,
     source: 'synthetic_test_mode',
-    verificationState: failed ? 'failed' : blockedForConfirmation ? 'blocked_unverified' : 'verified_synthetic',
+    verificationState: failed ? 'failed' : confirmationRequired ? 'blocked_unverified' : 'verified_synthetic',
     action: proposedAction?.type,
-    result: failed ? 'failed' : blockedForConfirmation ? 'blocked' : 'passed',
-    failureReason: !score.passed ? score.failures.join(', ') : toolResult && !toolResult.ok ? toolResult.message : undefined,
-    humanEscalationRequired: Boolean(scenario.mustEscalate || (toolResult && !toolResult.ok && toolResult.escalationRequired)),
+    result: failed ? 'failed' : confirmationRequired ? 'blocked' : 'passed',
+    failureReason: failed ? score.failures.join(', ') : undefined,
+    humanEscalationRequired: Boolean(scenario.mustEscalate),
     timestamp: new Date().toISOString(),
   };
+  return { scenario, observation, score, confirmationRequired, proposedAction, confirmationId, audit };
+}
 
-  return { scenario, observation, score, confirmationRequired: blockedForConfirmation, proposedAction, confirmationId, toolResult, audit };
+export async function confirmSyntheticScenario(
+  scenarioId: string,
+  confirmationId: string,
+  exactDisplayedAction: PilotActionPayload,
+): Promise<TestModeRun> {
+  const { scenario, observation, score } = baseScenario(scenarioId);
+  const toolResult = await executeLinhTool(
+    exactDisplayedAction,
+    {
+      businessId: pilotConfig.businessId,
+      locationId: pilotConfig.locationId,
+      callerPhone: '+17035550199',
+      language: scenario.language,
+      confirmationId,
+      idempotencyKey: `${scenario.id}-${confirmationId}`,
+    },
+    { pos: mockPosAdapter, booking: mockBookingAdapter, sideEffects: noOpSideEffects, config: pilotConfig },
+  );
+  const failed = !score.passed || !toolResult.ok;
+  const audit: PilotAuditRecord = {
+    id: `${scenario.id}-${Date.now()}`,
+    scenarioId: scenario.id,
+    source: 'synthetic_test_mode',
+    verificationState: failed ? 'failed' : 'verified_synthetic',
+    action: exactDisplayedAction.type,
+    result: failed ? 'failed' : 'passed',
+    failureReason: !score.passed ? score.failures.join(', ') : !toolResult.ok ? toolResult.message : undefined,
+    humanEscalationRequired: Boolean(scenario.mustEscalate || (!toolResult.ok && toolResult.escalationRequired)),
+    timestamp: new Date().toISOString(),
+  };
+  return {
+    scenario,
+    observation,
+    score,
+    confirmationRequired: false,
+    proposedAction: exactDisplayedAction,
+    confirmationId,
+    toolResult,
+    audit,
+  };
 }
