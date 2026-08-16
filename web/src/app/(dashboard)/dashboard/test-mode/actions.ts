@@ -1,7 +1,16 @@
 'use server';
 
-import { runSyntheticScenario } from '@/lib/test-mode/runner';
+import type { PilotActionPayload } from '@/lib/test-mode/types';
+import { confirmSyntheticScenario, prepareSyntheticScenario } from '@/lib/test-mode/runner';
 
-export async function runTestModeScenarioAction(scenarioId: string, confirmed: boolean) {
-  return runSyntheticScenario(scenarioId, confirmed);
+export async function runTestModeScenarioAction(scenarioId: string) {
+  return prepareSyntheticScenario(scenarioId);
+}
+
+export async function confirmTestModeScenarioAction(
+  scenarioId: string,
+  confirmationId: string,
+  exactDisplayedAction: PilotActionPayload,
+) {
+  return confirmSyntheticScenario(scenarioId, confirmationId, exactDisplayedAction);
 }
