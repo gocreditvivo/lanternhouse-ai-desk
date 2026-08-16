@@ -17,7 +17,7 @@ export type PilotDeploymentConfig = {
   businessId: string;
   locationId: string;
   timezone: string;
-  transferDestinations: Record<string, string>;
+  transferDestinationKeys: string[];
   smsMaxLength: number;
 };
 
