@@ -91,9 +91,8 @@ export async function executeLinhTool(
     }
 
     if (request.type === 'transfer_call') {
-      const target = deps.config.transferDestinations[request.destinationKey];
-      if (!target || !normalizeUsPhone(target)) return { ok: false, code: 'invalid_request', message: 'Transfer destination is not allowed by Test Mode configuration.' };
-      await deps.sideEffects.transferCall(target);
+      if (!deps.config.transferDestinationKeys.includes(request.destinationKey)) return { ok: false, code: 'invalid_request', message: 'Transfer destination is not allowed by Test Mode configuration.' };
+      await deps.sideEffects.transferCall(request.destinationKey);
       return { ok: true, type: 'transfer_call', simulated: true };
     }
 
