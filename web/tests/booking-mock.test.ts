@@ -18,17 +18,17 @@ describe('mockBookingAdapter', () => {
     ]);
   });
 
-  it('returns synthetic availability without touching a real calendar', async () => {
+  it('returns 5-8 PM America/New_York synthetic availability without a real calendar', async () => {
     const slots = await mockBookingAdapter.getAvailability(
       'lantern-house-falls-church',
       'mock-table-reservation',
-      '2026-08-16T00:00:00.000Z',
+      '2026-08-16T16:00:00.000Z',
     );
     expect(slots).toHaveLength(4);
     expect(slots[0]).toEqual(
       expect.objectContaining({
-        startIso: '2026-08-16T17:00:00.000Z',
-        endIso: '2026-08-16T18:30:00.000Z',
+        startIso: '2026-08-16T21:00:00.000Z',
+        endIso: '2026-08-16T22:30:00.000Z',
       }),
     );
   });
@@ -39,7 +39,7 @@ describe('mockBookingAdapter', () => {
         serviceId: 'mock-table-reservation',
         customerName: '',
         customerPhone: '',
-        startIso: '2026-08-16T17:00:00.000Z',
+        startIso: '2026-08-16T21:00:00.000Z',
       }),
     ).rejects.toThrow('Customer name and phone are required');
   });
