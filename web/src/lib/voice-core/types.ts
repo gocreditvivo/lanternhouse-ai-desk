@@ -1,3 +1,4 @@
+import type { BookingRequest, BookingResult } from '@/lib/booking/types';
 import type { PosOrderDraft, PosOrderResult } from '@/lib/pos/types';
 
 export type LinhLanguage = 'en' | 'vi';
@@ -24,6 +25,11 @@ export type LinhOrderRequest = {
   order: PosOrderDraft;
 };
 
+export type LinhBookingRequest = {
+  type: 'book_appointment';
+  booking: BookingRequest;
+};
+
 export type LinhTransferRequest = {
   type: 'transfer_call';
   targetPhone: string;
@@ -35,13 +41,18 @@ export type LinhSmsRequest = {
   body: string;
 };
 
-export type LinhToolRequest = LinhOrderRequest | LinhTransferRequest | LinhSmsRequest;
+export type LinhToolRequest = LinhOrderRequest | LinhBookingRequest | LinhTransferRequest | LinhSmsRequest;
 
 export type LinhToolResult =
   | {
       ok: true;
       type: 'create_order';
       order: PosOrderResult;
+    }
+  | {
+      ok: true;
+      type: 'book_appointment';
+      booking: BookingResult;
     }
   | {
       ok: true;
