@@ -13,6 +13,6 @@
     "lint": "cd web && npm run lint"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=18"
   }
 }
