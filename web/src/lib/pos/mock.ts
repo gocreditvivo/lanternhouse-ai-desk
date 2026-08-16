@@ -73,7 +73,7 @@ export const mockPosAdapter: PosAdapter = {
   provider: 'mock',
   capabilities,
   async getLocations() {
-    return [{ id: 'lantern-house-falls-church', name: 'Synthetic Falls Church Pilot Location' }];
+    return [{ id: 'lantern-house-falls-church', name: 'Lantern House Falls Church' }];
   },
   async getMenu(locationId) {
     if (locationId !== 'lantern-house-falls-church') return [];
@@ -85,8 +85,9 @@ export const mockPosAdapter: PosAdapter = {
   },
   async createOrder(locationId, order): Promise<PosOrderResult> {
     if (locationId !== 'lantern-house-falls-church') throw new Error('Unknown synthetic location');
+    if (order.lines.length === 0) throw new Error('Order must contain at least one item');
     return {
-      externalOrderId: `test-order-${Date.now()}`,
+      externalOrderId: `mock-test-${Date.now()}`,
       status: 'received',
       totalCents: calculateTotal(order),
       currency: 'USD',
