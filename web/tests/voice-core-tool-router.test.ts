@@ -9,7 +9,7 @@ const config: PilotDeploymentConfig = {
   businessId: 'lantern-house-test',
   locationId: 'lantern-house-falls-church',
   timezone: 'America/New_York',
-  transferDestinations: { manager: '+17035550101' },
+  transferDestinationKeys: ['manager'],
   smsMaxLength: 320,
 };
 
@@ -62,6 +62,12 @@ describe('executeLinhTool Test Mode safety', () => {
     const payload: PilotActionPayload = { type: 'transfer_call', destinationKey: 'attacker-selected' };
     expect(await executeLinhTool(payload, contextFor(payload), deps)).toMatchObject({ ok: false, code: 'invalid_request' });
     expect(sideEffects.transferCall).not.toHaveBeenCalled();
+  });
+
+  it('uses only the deployment-controlled symbolic transfer key in Test Mode', async () => {
+    const payload: PilotActionPayload = { type: 'transfer_call', destinationKey: 'manager' };
+    expect(await executeLinhTool(payload, contextFor(payload), deps)).toMatchObject({ ok: true, type: 'transfer_call', simulated: true });
+    expect(sideEffects.transferCall).toHaveBeenCalledWith('manager');
   });
 
   it('validates SMS phone consent and length while remaining simulated', async () => {
