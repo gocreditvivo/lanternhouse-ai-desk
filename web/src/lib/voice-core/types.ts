@@ -1,7 +1,7 @@
 import type { BookingRequest, BookingResult } from '@/lib/booking/types';
 import type { PosOrderDraft, PosOrderResult } from '@/lib/pos/types';
 
-export type LinhLanguage = 'en' | 'vi';
+export type LinhLanguage = 'en' | 'vi' | 'mixed';
 
 export type LinhIntent =
   | 'menu_question'
@@ -17,7 +17,8 @@ export type LinhCallContext = {
   locationId?: string;
   callerPhone?: string;
   language: LinhLanguage;
-  callerConfirmedAction?: boolean;
+  confirmationId?: string;
+  idempotencyKey?: string;
 };
 
 export type LinhOrderRequest = {
@@ -32,41 +33,38 @@ export type LinhBookingRequest = {
 
 export type LinhTransferRequest = {
   type: 'transfer_call';
-  targetPhone: string;
+  destinationKey: string;
 };
 
 export type LinhSmsRequest = {
   type: 'send_sms';
   to: string;
   body: string;
+  transactional: boolean;
+  consentRecorded: boolean;
 };
 
 export type LinhToolRequest = LinhOrderRequest | LinhBookingRequest | LinhTransferRequest | LinhSmsRequest;
 
 export type LinhToolResult =
-  | {
-      ok: true;
-      type: 'create_order';
-      order: PosOrderResult;
-    }
-  | {
-      ok: true;
-      type: 'book_appointment';
-      booking: BookingResult;
-    }
-  | {
-      ok: true;
-      type: 'transfer_call' | 'send_sms';
-    }
+  | { ok: true; type: 'create_order'; order: PosOrderResult; simulated: true }
+  | { ok: true; type: 'book_appointment'; booking: BookingResult; simulated: true }
+  | { ok: true; type: 'transfer_call' | 'send_sms'; simulated: true }
   | {
       ok: false;
       code:
         | 'missing_confirmation'
+        | 'confirmation_expired'
+        | 'confirmation_mismatch'
+        | 'confirmation_replayed'
+        | 'duplicate_request'
         | 'unsupported_capability'
         | 'unverified_price'
+        | 'availability_unverified'
         | 'invalid_request'
         | 'provider_error';
       message: string;
+      escalationRequired?: boolean;
     };
 
 export interface LinhSideEffects {
